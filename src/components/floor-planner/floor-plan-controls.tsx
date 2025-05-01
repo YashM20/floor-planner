@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useFloorPlanStore } from '@/store/use-floor-plan-store'
 import { WALL_HEIGHT_RANGE, FLOOR_STYLES, WALL_STYLES, VIEWS } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Toggle } from '@/components/ui/toggle'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import { Textarea } from "@/components/ui/textarea"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   AlertCircle,
   CheckCircle,
@@ -18,13 +21,22 @@ import {
   Grid3X3,
   Layers,
   Palette,
-  Ruler
+  Ruler,
+  UploadCloud,
+  Download,
+  ClipboardCopy
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { FloorPlanAnalysis } from '@/types/floor-plan'
+import { FloorPlanAnalysisSchema } from '@/types/floor-plan'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 export function FloorPlanControls () {
+  const [jsonDataInput, setJsonDataInput] = useState('');
+  const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const viewTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   const {
     uploadedImage,
     wallHeight,
@@ -171,10 +183,101 @@ export function FloorPlanControls () {
     }
   }
 
+  // Function to load analysis result from pasted JSON
+  const handleLoadJsonData = () => {
+    if (!jsonDataInput) {
+      toast.warning('Please paste JSON data into the text area.');
+      return;
+    }
+    let parsedData;
+    try {
+      parsedData = JSON.parse(jsonDataInput);
+      // Log the parsed data structure
+      console.log('[Controls] Parsed JSON data:', typeof parsedData, parsedData);
+    } catch (error) {
+      console.error('[Controls] Error parsing JSON string:', error);
+      toast.error('Failed to parse JSON data.', {
+        description: 'Please ensure the text is valid JSON format (e.g., check quotes, commas).',
+      });
+      // Keep dialog open and input intact for correction
+      return; 
+    }
+
+    try {
+      const validationResult = FloorPlanAnalysisSchema.safeParse(parsedData);
+
+      if (!validationResult.success) {
+        // Log the raw validation result object AND its properties
+        console.error('[Controls] Zod validation failed.');
+        console.error('[Controls] Raw validationResult object:', validationResult);
+        console.error('[Controls] validationResult.success:', validationResult.success); // Should be false
+        console.error('[Controls] validationResult.error:', validationResult.error); // Should be a ZodError object
+
+        // Attempt to flatten, guarding against missing error property
+        const flatErrors = validationResult.error ? validationResult.error.flatten() : { formErrors: ["Unknown validation error"], fieldErrors: {} };
+        console.error('[Controls] Flattened Zod errors:', flatErrors);
+        
+        // Format Zod errors for better display
+        const fieldErrors = flatErrors.fieldErrors;
+        let errorDescription = 'Validation failed: \n';
+        for (const key in fieldErrors) {
+          errorDescription += `- ${key.replace(/_/g, '[').replace(/\.(\d+)\./g, '[$1].')} : ${fieldErrors[key as keyof typeof fieldErrors]?.join(', ')}\n`;
+        }
+        const formErrors = flatErrors.formErrors;
+        if (formErrors.length > 0) {
+           errorDescription += `General errors: ${formErrors.join(', ')}`;
+        }
+        if (!errorDescription.includes('-') && formErrors.length === 0) { // Check if any errors were added
+            errorDescription = "Validation failed: The provided JSON structure doesn't match the expected format.";
+        }
+
+        toast.error('Invalid data structure. Please fix errors:', {
+           description: () => (
+            <pre className="mt-2 whitespace-pre-wrap text-xs font-mono bg-destructive/10 p-2 rounded">
+              {errorDescription}
+            </pre>
+          ),
+          duration: 10000, 
+        });
+        return;
+      }
+
+      // Step 3: If valid, set it in the store
+      useFloorPlanStore.setState({
+        analysisResult: validationResult.data,
+        uploadedImage: null, // Clear uploaded image as we are loading data directly
+        processingStage: 'done', // Mark as done
+        error: null,
+      });
+
+      toast.success('JSON data loaded successfully!');
+      setJsonDataInput(''); // Clear input field ONLY on success
+      setIsLoadDialogOpen(false); // Close dialog ONLY on success
+    } catch (error) {
+      // Catch unexpected errors during validation or state update
+      console.error('[Controls] Unexpected error loading validated JSON data:', error);
+      toast.error('An unexpected error occurred while loading the data.');
+    }
+  };
+
+  // Function to copy analysis JSON to clipboard
+  const handleCopyJson = () => {
+    if (!analysisResult || !viewTextareaRef.current) return;
+    try {
+      const jsonString = JSON.stringify(analysisResult, null, 2);
+      navigator.clipboard.writeText(jsonString);
+      toast.success('Analysis JSON copied to clipboard!');
+    } catch (error) {
+      console.error('[Controls] Failed to copy JSON:', error);
+      toast.error('Failed to copy JSON data.');
+    }
+  };
+
   const isBusy = processingStage === 'sending' || processingStage === 'analyzing' || processingStage === 'validating'
   const canProcess = !!uploadedImage && !analysisResult && !isBusy
   const canSave = !!analysisResult && !isBusy
   const canLoad = !isBusy
+  const canViewJson = !!analysisResult && !isBusy // Condition to enable View JSON button
 
   return (
     <Card>
@@ -214,7 +317,6 @@ export function FloorPlanControls () {
             </Button>
           </div>
           
-          {/* Add Save/Load buttons */}
           <div className="flex justify-between gap-2 mt-2">
             <Button 
               variant="outline" 
@@ -224,7 +326,7 @@ export function FloorPlanControls () {
               className="flex-1"
             >
               <Layers className="mr-2 h-4 w-4" />
-              Save Analysis
+              Save Analysis (LocalStorage)
             </Button>
             <Button 
               variant="outline" 
@@ -234,8 +336,75 @@ export function FloorPlanControls () {
               className="flex-1"
             >
               <Boxes className="mr-2 h-4 w-4" />
-              Load Analysis
+              Load Analysis (LocalStorage)
             </Button>
+          </div>
+          
+          <div className="flex justify-between gap-2 mt-2">
+            <Dialog open={isLoadDialogOpen} onOpenChange={setIsLoadDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={!canLoad} className="flex-1">
+                  <UploadCloud className="mr-2 h-4 w-4" /> Load JSON Data
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="flex flex-col justify-between overflow-hidden sm:max-w-[600px] max-h-[90%]">
+                <DialogHeader>
+                  <DialogTitle>Load Floor Plan JSON</DialogTitle>
+                  <DialogDescription>
+                    Paste your previously generated FloorPlanAnalysis JSON data below.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col flex-1 overflow-y-auto py-4 max-h-full">
+                  <Textarea 
+                    placeholder='{ "overallDimensions": { ... }, "rooms": [ ... ], ... }'
+                    rows={15}
+                    spellCheck={false}
+                    value={jsonDataInput}
+                    onChange={(e) => setJsonDataInput(e.target.value)}
+                    className="font-mono text-xs"
+                  />
+                </div>
+                <DialogFooter className="flex flex-row ">
+                  <DialogClose asChild>
+                    <Button type="button" variant="secondary">Cancel</Button>
+                  </DialogClose>
+                  <Button type="button" onClick={handleLoadJsonData}>Load Data</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={!canViewJson} className="flex-1">
+                  <Download className="mr-2 h-4 w-4" /> View Analysis JSON
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>View Floor Plan Analysis JSON</DialogTitle>
+                  <DialogDescription>
+                    Below is the structured data generated from the analysis.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <ScrollArea className="h-[400px] w-full rounded-md border p-4 bg-muted/30">
+                    <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                      <code>
+                        {analysisResult ? JSON.stringify(analysisResult, null, 2) : 'No analysis data available.'}
+                      </code>
+                    </pre>
+                  </ScrollArea>
+                </div>
+                <DialogFooter className="sm:justify-between">
+                   <Button type="button" onClick={handleCopyJson} variant="secondary" disabled={!analysisResult}>
+                     <ClipboardCopy className="mr-2 h-4 w-4"/> Copy JSON
+                  </Button>
+                  <DialogClose asChild>
+                    <Button type="button" variant="outline">Close</Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
           
           <div className="mt-4 space-y-2">
@@ -331,7 +500,38 @@ export function FloorPlanControls () {
         
         {analysisResult && !isBusy && (
           <div className={`border-t pt-4 space-y-4`}>
-            {/* Add any additional content for the analysis result section */}
+            <h3 className="text-sm font-medium text-muted-foreground">View Controls</h3>
+            <div className="flex items-center justify-between">
+              <Label>View Controls</Label>
+              <Toggle
+                pressed={wireframeMode}
+                onPressedChange={toggleWireframeMode}
+                aria-label="Toggle wireframe mode"
+                disabled={isBusy}
+              >
+                <Grid3X3 className="h-4 w-4 mr-2" />
+                Wireframe
+              </Toggle>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              {VIEWS.map(view => (
+                <Button
+                  key={view.id}
+                  variant={currentView === view.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentView(view.id as any)}
+                  className="flex-1"
+                  disabled={isBusy}
+                >
+                  {view.id === 'top' && <Eye className="h-4 w-4 mr-2" />}
+                  {view.id === 'front' && <Ruler className="h-4 w-4 mr-2" />}
+                  {view.id === 'side' && <Palette className="h-4 w-4 mr-2" />}
+                  {view.id === 'perspective' && <Boxes className="h-4 w-4 mr-2" />}
+                  {view.name}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>

@@ -2,7 +2,7 @@
 
 import { useMemo, useEffect } from 'react'
 import * as THREE from 'three'
-import { Text } from '@react-three/drei'
+import { Html } from '@react-three/drei'
 // import { CSG } from 'three-bvh-csg' // Import CSG if needed later for openings
 import { useFloorPlanStore } from '@/store/use-floor-plan-store'
 import type { Room, WallSegment, Point } from '@/types/floor-plan'
@@ -135,10 +135,10 @@ export function FloorPlan3D ({ wireframe = false }: FloorPlan3DProps) {
         // Handle other UP_AXIS if needed
       }
 
-      // Calculate center for label
-      const center2D = room.center || { x: centerX, y: centerY }
-      const center3D = worldCoords(center2D, centerX, centerY, scale)
-      center3D[UP_AXIS] = wallHeight / 2 // Position label in the middle of the room height
+      // Calculate center for HTML label - position slightly above the floor
+      const center2D = room.center || { x: centerX, y: centerY } 
+      const labelPosition = worldCoords(center2D, centerX, centerY, scale)
+      labelPosition[UP_AXIS] = 0.1 // Position 10cm above floor level
 
       return (
         <group key={room.id || `room-${index}`}>
@@ -149,22 +149,22 @@ export function FloorPlan3D ({ wireframe = false }: FloorPlan3DProps) {
             rotation={floorRotation}
             receiveShadow 
           />
-          <Text
-            position={center3D}
-            fontSize={0.2 * (scale / PIXELS_PER_METER)}
-            color="#333333"
-            anchorX="center"
-            anchorY="middle"
-            outlineWidth={0.01}
-            outlineColor="#ffffff"
+          <Html 
+            position={labelPosition} 
+            center // Centers the HTML content block on the position
+            className="select-none pointer-events-none" // Prevent interaction with label
+            occlude // Optional: Make label hide behind walls (can remove if labels should always be visible)
+            // distanceFactor={10} // Optional: Make label smaller further away
           >
-            {room.name || 'Room'}
-          </Text>
+            <div className="bg-background/70 backdrop-blur-sm text-foreground px-2 py-1 rounded text-xs whitespace-nowrap shadow">
+              {room.name || 'Room'}
+            </div>
+          </Html>
         </group>
       )
     }).filter(Boolean)
 
-  }, [analysisResult, overallDim, roomsData, scale, floorMaterial, wallHeight])
+  }, [analysisResult, overallDim, roomsData, scale, floorMaterial])
 
   const wallMeshes = useMemo(() => {
     if (!analysisResult || !overallDim || wallsData.length === 0) return []
