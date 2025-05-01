@@ -6,9 +6,18 @@ import { VIEWS } from '@/lib/constants'
 // Derive valid view IDs from the constant
 type ViewId = typeof VIEWS[number]['id']
 
+type ProcessingStage = 
+  | 'idle' 
+  | 'sending' 
+  | 'analyzing' 
+  | 'validating' 
+  | 'error' 
+  | 'done'
+
 type FloorPlanState = {
   uploadedImage: string | null // Base64 encoded image or URL
-  isProcessing: boolean
+  isProcessing: boolean // Kept for simplicity in some checks, but stage is more granular
+  processingStage: ProcessingStage
   analysisResult: FloorPlanAnalysis | null
   error: string | null
   wallHeight: number // in meters
@@ -20,10 +29,9 @@ type FloorPlanState = {
 
 type FloorPlanActions = {
   setUploadedImage: (image: string | null) => void
-  startProcessing: () => void
+  setProcessingStage: (stage: ProcessingStage) => void
   setAnalysisResult: (result: FloorPlanAnalysis | null) => void
   setError: (error: string | null) => void
-  resetProcessing: () => void
   setWallHeight: (height: number) => void
   setSelectedFloorStyle: (style: string) => void
   setSelectedWallStyle: (style: string) => void
@@ -34,6 +42,7 @@ type FloorPlanActions = {
 const initialState: FloorPlanState = {
   uploadedImage: null,
   isProcessing: false,
+  processingStage: 'idle',
   analysisResult: null,
   error: null,
   wallHeight: 2.5, // Default wall height
@@ -50,26 +59,33 @@ export const useFloorPlanStore = create<FloorPlanState & FloorPlanActions>()(
     setUploadedImage: (image) => {
       set((state) => {
         state.uploadedImage = image
-        state.analysisResult = null // Reset analysis when new image is uploaded
+        state.analysisResult = null
         state.error = null
         state.isProcessing = false
+        state.processingStage = 'idle' // Reset stage on new image
       })
     },
 
-    startProcessing: () => {
+    setProcessingStage: (stage) => {
       set((state) => {
-        state.isProcessing = true
-        state.error = null
-        state.analysisResult = null // Clear previous results before processing
+        console.log(`[Store] Setting processing stage: ${stage}`)
+        state.processingStage = stage
+        state.isProcessing = stage === 'sending' || stage === 'analyzing' || stage === 'validating'
+        if (stage !== 'error') {
+          state.error = null // Clear error if stage is not error
+        }
+        if (stage === 'sending') {
+           state.analysisResult = null // Clear previous results when starting
+        }
       })
     },
 
     setAnalysisResult: (result) => {
       set((state) => {
-        // Log the received structure for debugging
         console.log('[Store] Setting analysis result:', result)
         state.analysisResult = result 
-        state.isProcessing = false // Processing done
+        state.processingStage = result ? 'done' : 'idle' // Move to done or idle if null
+        state.isProcessing = false
         state.error = null
       })
     },
@@ -77,14 +93,8 @@ export const useFloorPlanStore = create<FloorPlanState & FloorPlanActions>()(
     setError: (error) => {
       set((state) => {
         state.error = error
-        state.isProcessing = false // Stop processing on error
-      })
-    },
-
-    resetProcessing: () => {
-      set((state) => {
+        state.processingStage = 'error' // Set stage to error
         state.isProcessing = false
-        state.error = null
       })
     },
 

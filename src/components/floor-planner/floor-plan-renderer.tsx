@@ -14,12 +14,12 @@ import {
 } from '@react-three/drei'
 import { FloorPlan3D } from '@/components/floor-planner/floor-plan-3d'
 import { Card } from '@/components/ui/card'
-import { ImageIcon, Loader2 } from 'lucide-react'
+import { ImageIcon, Loader2, AlertCircle } from 'lucide-react'
 
 export function FloorPlanRenderer() {
   const { 
     uploadedImage,
-    isProcessing,
+    processingStage,
     analysisResult,
     wireframeMode, 
     currentView,
@@ -29,14 +29,14 @@ export function FloorPlanRenderer() {
   useEffect(() => {
     console.log('[Renderer] Rendering state:', {
       hasUploadedImage: !!uploadedImage,
-      isProcessing,
+      processingStage,
       analysisResultAvailable: !!analysisResult,
       roomsCount: analysisResult?.rooms?.length || 0,
       wireframeMode,
       currentView,
       renderingMode: analysisResult && analysisResult.rooms.length > 0 ? '3D' : '2D'
     })
-  }, [uploadedImage, isProcessing, analysisResult, wireframeMode, currentView])
+  }, [uploadedImage, processingStage, analysisResult, wireframeMode, currentView])
 
   // Set up camera positions for different views
   const getCameraProps = () => {
@@ -68,23 +68,40 @@ export function FloorPlanRenderer() {
     )
   }
 
-  // Display processing state
-  if (isProcessing) {
+  // Display processing stages
+  if (processingStage === 'sending' || processingStage === 'analyzing' || processingStage === 'validating') {
     return (
       <Card className="w-full h-full flex items-center justify-center">
         <div className="flex flex-col items-center text-muted-foreground p-4">
           <Loader2 className="h-16 w-16 mb-4 animate-spin" />
           <h3 className="text-lg font-medium mb-1">Processing Floor Plan</h3>
           <p className="text-sm text-center">
-            Analyzing the image and detecting rooms...
+            {processingStage === 'sending' && 'Sending image data...'}
+            {processingStage === 'analyzing' && 'AI is analyzing the image...'}
+            {processingStage === 'validating' && 'Validating analysis results...'}
           </p>
         </div>
       </Card>
     )
   }
 
-  // Display 2D image while waiting for 3D generation
-  if (!analysisResult || analysisResult.rooms.length === 0) {
+  // Display error state
+  if (processingStage === 'error') {
+     return (
+      <Card className="w-full h-full flex items-center justify-center">
+        <div className="flex flex-col items-center text-destructive p-4">
+          <AlertCircle className="h-16 w-16 mb-4" />
+          <h3 className="text-lg font-medium mb-1">Processing Error</h3>
+          <p className="text-sm text-center">
+            Failed to analyze the floor plan. Check controls for details.
+          </p>
+        </div>
+      </Card>
+    )
+  }
+  
+  // Display 2D image if processing is idle/done but no analysis results (or empty results)
+  if (!analysisResult || analysisResult.rooms.length === 0 || analysisResult.walls.length === 0) {
     return (
       <Card className="w-full h-full flex items-center justify-center overflow-hidden">
         <div className="relative w-full h-full">
@@ -93,10 +110,10 @@ export function FloorPlanRenderer() {
             alt="Floor Plan" 
             className="w-full h-full object-contain"
           />
-          {analysisResult && analysisResult.rooms.length > 0 && (
-            <div className="absolute bottom-4 left-4 right-4 bg-background/80 backdrop-blur-sm rounded-lg p-3">
-              <p className="text-sm">
-                {analysisResult.rooms.length} rooms detected. Click "Generate 3D Model" to continue.
+          {(processingStage === 'done' && (!analysisResult || analysisResult.rooms.length === 0 || analysisResult.walls.length === 0)) && (
+             <div className="absolute bottom-4 left-4 right-4 bg-background/80 backdrop-blur-sm rounded-lg p-3 text-center">
+              <p className="text-sm text-warning">
+                Analysis complete, but no rooms or walls were detected. Cannot generate 3D model.
               </p>
             </div>
           )}
@@ -105,7 +122,7 @@ export function FloorPlanRenderer() {
     )
   }
 
-  // Render the 3D floor plan when analysis result is available
+  // Render the 3D floor plan only when analysis is 'done' and results are valid
   return (
     <Card className="flex flex-1 w-full h-full overflow-hidden">
       <div className="flex flex-1 w-full h-full">

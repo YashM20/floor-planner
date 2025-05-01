@@ -3,7 +3,8 @@ import { CoreTool, generateText, tool } from 'ai'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import {
-  FloorPlanAnalysisSchema // Import the updated schema
+  FloorPlanAnalysisSchema,
+  FloorPlanAnalysis // Ensure the type is imported
 } from '@/types/floor-plan'
 
 // Define the schema for the request body
@@ -132,20 +133,38 @@ export async function POST (req: NextRequest) {
     }
 
     console.log('[API] Tool result extracted successfully.')
-    // The result from execute() is already the parsed analysis
-    const analysisData = toolResult.result
+    const analysisData = toolResult.result as FloorPlanAnalysis // Cast for type safety
 
-    // Validate the final data again
-    console.log('[API] Validating final analysis data...')
+    console.log('[API] Validating final analysis data (Schema)...')
     const finalValidation = FloorPlanAnalysisSchema.safeParse(analysisData)
     if (!finalValidation.success) {
-      console.error('[API] Final validation failed:', finalValidation.error.flatten())
+      console.error('[API] Schema validation failed:', finalValidation.error.flatten())
       // console.error('[API] Invalid data received:', analysisData) // Log the invalid data
-      throw new Error('AI returned data in unexpected format after tool execution.')
+      return NextResponse.json(
+        { error: 'AI returned data in unexpected format after tool execution.', details: finalValidation.error.flatten() }, 
+        { status: 400 } // Use 400 for bad data format from AI
+      )
+    }
+    
+    // Perform structural validation after schema validation passes
+    console.log('[API] Performing structural validation...')
+    const validatedData = finalValidation.data // Use the validated data
+    if (!validatedData || !Array.isArray(validatedData.rooms) || !Array.isArray(validatedData.walls)) {
+       console.error('[API] Structural validation failed: Missing rooms or walls array.', validatedData)
+       return NextResponse.json(
+         { error: 'AI response lacks essential structure (rooms or walls).' },
+         { status: 500 } // Use 500 as it's an unexpected *valid* schema but missing required content
+       )
+    }
+    // Optional: Add more checks, e.g., ensure at least one room/wall exists if expected
+    if (validatedData.rooms.length === 0 || validatedData.walls.length === 0) {
+       console.warn('[API] Structural validation warning: No rooms or walls detected.')
+       // Decide if this is an error or acceptable (e.g., for an empty image)
+       // For now, we allow it but log a warning.
     }
 
     console.log('[API] Detailed analysis successful, returning data.')
-    return NextResponse.json(finalValidation.data)
+    return NextResponse.json(validatedData) // Return the validated data
 
   } catch (error) {
     console.error('[API] Error during AI processing or validation:', error)

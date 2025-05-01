@@ -25,18 +25,16 @@ import type { FloorPlanAnalysis } from '@/types/floor-plan'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 export function FloorPlanControls () {
-  const [generating3D, setGenerating3D] = useState(false)
-
   const {
     uploadedImage,
     wallHeight,
-    isProcessing,
+    processingStage,
     analysisResult,
     error,
     setWallHeight,
     setSelectedFloorStyle,
     setSelectedWallStyle,
-    startProcessing,
+    setProcessingStage,
     setAnalysisResult,
     setError,
     selectedFloorStyle,
@@ -49,18 +47,20 @@ export function FloorPlanControls () {
 
   const handleProcessPlan = async () => {
     console.log('[Controls] handleProcessPlan triggered.')
-    if (!uploadedImage || isProcessing) {
+    const isBusy = processingStage === 'sending' || processingStage === 'analyzing' || processingStage === 'validating'
+    if (!uploadedImage || isBusy) {
       console.log('[Controls] Processing skipped: No image or already processing.')
       return
     }
 
-    console.log('[Controls] Starting processing state.')
-    startProcessing()
-    setError(null)
+    console.log('[Controls] Starting processing.')
+    setProcessingStage('sending')
 
     try {
       toast.info('Sending floor plan to AI...')
       console.log('[Controls] Calling /api/process-floor-plan...')
+
+      setProcessingStage('analyzing')
       const response = await fetch('/api/process-floor-plan', {
         method: 'POST',
         headers: {
@@ -72,25 +72,39 @@ export function FloorPlanControls () {
       console.log(`[Controls] API response status: ${response.status}`)
 
       if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`
-        let errorDetails = null;
+        let errorMessage = `API Error (${response.status})`
+        let errorDetails = null
         try {
           errorDetails = await response.json()
           console.error('[Controls] API Error Response Body:', errorDetails)
-          errorMessage = errorDetails?.details || errorDetails?.error || errorMessage
-          toast.warning(`Received error response: ${errorMessage}`)
+          const detailMsg = typeof errorDetails?.details === 'string' ? errorDetails.details :
+                            typeof errorDetails?.error === 'string' ? errorDetails.error :
+                            (errorDetails?.details?.formErrors?.length > 0 ? errorDetails.details.formErrors.join(', ') : null)
+          errorMessage = detailMsg ? `${errorMessage}: ${detailMsg}` : errorMessage
+          toast.warning(`Error response received: ${errorMessage}`)
         } catch (jsonError) {
           console.error('[Controls] Failed to parse error JSON', jsonError)
-          toast.warning('Received non-JSON error response.')
+          errorMessage = `${errorMessage}: Could not parse error response.`
+          toast.warning('Received non-JSON error response from server.')
         }
         setError(errorMessage)
-        toast.error(`Processing failed. Please check the error message.`)
+        toast.error(`Processing failed: ${errorMessage}`)
         console.log('[Controls] Set error state:', errorMessage)
         return
       }
 
+      setProcessingStage('validating')
       const resultData: FloorPlanAnalysis = await response.json()
       console.log('[Controls] API Success. Received data:', resultData)
+
+      if (!resultData || !Array.isArray(resultData.rooms) || !Array.isArray(resultData.walls)) {
+        console.error('[Controls] Invalid data structure received from API:', resultData)
+        const structuralError = 'AI response lacks essential structure (rooms or walls).'
+        setError(structuralError)
+        toast.error(`Processing failed: ${structuralError}`)
+        return
+      }
+
       setAnalysisResult(resultData)
       toast.success('Floor plan processed successfully!')
       console.log('[Controls] Set analysis result state.')
@@ -100,26 +114,6 @@ export function FloorPlanControls () {
       setError(message)
       toast.error(`Processing failed: ${message}`)
       console.log('[Controls] Set error state from catch block:', message)
-    }
-  }
-
-  const handleGenerate3D = async () => {
-    if (!analysisResult || generating3D || isProcessing) {
-      console.log('[Controls] Generate 3D skipped: No analysis or busy.')
-      return
-    }
-    console.log('[Controls] handleGenerate3D triggered.')
-    setGenerating3D(true)
-    toast.info('Generating 3D model...')
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      console.log('[Controls] 3D Generation complete (simulation). Triggering update based on:', analysisResult)
-      toast.success('3D Model Generated/Updated!')
-    } catch (error) {
-      console.error('[Controls] Error during simulated 3D generation:', error)
-      toast.error('Failed to generate 3D model.')
-    } finally {
-      setGenerating3D(false)
     }
   }
 
@@ -166,7 +160,7 @@ export function FloorPlanControls () {
       useFloorPlanStore.setState({
         uploadedImage: savedData.image,
         analysisResult: savedData.analysis,
-        isProcessing: false,
+        processingStage: 'done',
         error: null
       })
 
@@ -177,10 +171,10 @@ export function FloorPlanControls () {
     }
   }
 
-  const canProcess = !!uploadedImage && !analysisResult
-  const canGenerate = !!analysisResult && !isProcessing && !generating3D
-  const canSave = !!analysisResult && !isProcessing
-  const canLoad = !isProcessing
+  const isBusy = processingStage === 'sending' || processingStage === 'analyzing' || processingStage === 'validating'
+  const canProcess = !!uploadedImage && !analysisResult && !isBusy
+  const canSave = !!analysisResult && !isBusy
+  const canLoad = !isBusy
 
   return (
     <Card>
@@ -195,16 +189,18 @@ export function FloorPlanControls () {
           <div className="flex justify-between flex-wrap gap-2">
             <Button
               variant="default"
-              disabled={!canProcess || isProcessing}
+              disabled={!canProcess}
               onClick={handleProcessPlan}
               className="flex-1 min-w-[150px]"
             >
-              {isProcessing ? (
+              {processingStage === 'sending' || processingStage === 'analyzing' || processingStage === 'validating' ? (
                 <>
                   <Cpu className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
+                  {processingStage === 'sending' && 'Sending...'}
+                  {processingStage === 'analyzing' && 'Analyzing...'}
+                  {processingStage === 'validating' && 'Validating...'}
                 </>
-              ) : analysisResult ? (
+              ) : processingStage === 'done' ? (
                 <>
                   <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                   Processed!
@@ -242,40 +238,19 @@ export function FloorPlanControls () {
             </Button>
           </div>
           
-          {/* Generate 3D Button */}
-          <div className="mt-4">
-            <Button
-              variant="default"
-              size="lg"
-              disabled={!canGenerate}
-              onClick={handleGenerate3D}
-              className="w-full"
-            >
-              {generating3D ? (
-                <>
-                  <Boxes className="mr-2 h-5 w-5 animate-spin" />
-                  Generating 3D Model...
-                </>
-              ) : (
-                <>
-                  <Boxes className="mr-2 h-5 w-5" />
-                  Generate 3D Model
-                </>
-              )}
-            </Button>
-          </div>
-          
           <div className="mt-4 space-y-2">
-            {isProcessing && (
+            {(processingStage === 'sending' || processingStage === 'analyzing' || processingStage === 'validating') && (
               <Alert variant="default" className="bg-blue-50 border-blue-200">
-                <Cpu className="h-4 w-4 animate-spin" />
-                <AlertTitle>Processing...</AlertTitle>
-                <AlertDescription>
-                  The AI is analyzing your floor plan. This may take a moment.
+                <Cpu className="h-4 w-4 animate-spin text-blue-600" />
+                <AlertTitle className="text-blue-800">Processing Floor Plan</AlertTitle>
+                <AlertDescription className="text-blue-700">
+                  {processingStage === 'sending' && 'Sending image data to the analysis service...'}
+                  {processingStage === 'analyzing' && 'The AI is analyzing the floor plan structure. This may take a moment...'}
+                  {processingStage === 'validating' && 'Validating the received analysis data...'}
                 </AlertDescription>
               </Alert>
             )}
-            {error && !isProcessing && (
+            {processingStage === 'error' && error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Processing Error</AlertTitle>
@@ -284,7 +259,7 @@ export function FloorPlanControls () {
                 </AlertDescription>
               </Alert>
             )}
-            {analysisResult && !isProcessing && !error && (
+            {processingStage === 'done' && analysisResult && (
               <Alert variant="default" className="bg-green-50 border-green-200">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <AlertTitle className="text-green-800">Success!</AlertTitle>
@@ -295,7 +270,7 @@ export function FloorPlanControls () {
             )}
           </div>
           
-          <div className={`space-y-4 pt-4 border-t ${!analysisResult || isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className={`space-y-4 pt-4 border-t ${!analysisResult || isBusy ? 'opacity-50 pointer-events-none' : ''}`}>
             <h3 className="text-sm font-medium text-muted-foreground">Customize 3D Model</h3>
             <div className="space-y-2">
               <Label htmlFor="wall-height">Wall Height: {wallHeight}m</Label>
@@ -306,7 +281,7 @@ export function FloorPlanControls () {
                 step={0.1}
                 value={[wallHeight]}
                 onValueChange={(value) => setWallHeight(value[0])}
-                disabled={!analysisResult || isProcessing || generating3D}
+                disabled={!analysisResult || isBusy}
               />
             </div>
             
@@ -316,7 +291,7 @@ export function FloorPlanControls () {
                 <Select
                   value={selectedFloorStyle}
                   onValueChange={setSelectedFloorStyle}
-                  disabled={!analysisResult || isProcessing || generating3D}
+                  disabled={!analysisResult || isBusy}
                 >
                   <SelectTrigger id="floor-style">
                     <SelectValue placeholder="Select style" />
@@ -336,7 +311,7 @@ export function FloorPlanControls () {
                 <Select
                   value={selectedWallStyle}
                   onValueChange={setSelectedWallStyle}
-                  disabled={!analysisResult || isProcessing || generating3D}
+                  disabled={!analysisResult || isBusy}
                 >
                   <SelectTrigger id="wall-style">
                     <SelectValue placeholder="Select style" />
@@ -354,66 +329,12 @@ export function FloorPlanControls () {
           </div>
         </div>
         
-        {analysisResult && (
-          <div className="border-t pt-4">
-            <Button
-              className="w-full"
-              variant="default"
-              disabled={!canGenerate}
-              onClick={handleGenerate3D}
-            >
-              {generating3D ? (
-                <>
-                  <Layers className="mr-2 h-4 w-4 animate-spin" />
-                  Generating 3D...
-                </>
-              ) : (
-                <>
-                  <Layers className="mr-2 h-4 w-4" />
-                  Generate / Update 3D Model
-                </>
-              )}
-            </Button>
-          </div>
-        )}
-
-        {analysisResult && !isProcessing && (
-          <div className={`border-t pt-4 space-y-4 ${!analysisResult || isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
-            <h3 className="text-sm font-medium text-muted-foreground">View Controls</h3>
-            <div className="flex items-center justify-between">
-              <Label>View Controls</Label>
-              <Toggle
-                pressed={wireframeMode}
-                onPressedChange={toggleWireframeMode}
-                aria-label="Toggle wireframe mode"
-                disabled={isProcessing || generating3D}
-              >
-                <Grid3X3 className="h-4 w-4 mr-2" />
-                Wireframe
-              </Toggle>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              {VIEWS.map(view => (
-                <Button
-                  key={view.id}
-                  variant={currentView === view.id ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCurrentView(view.id as any)}
-                  className="flex-1"
-                  disabled={isProcessing || generating3D}
-                >
-                  {view.id === 'top' && <Eye className="h-4 w-4 mr-2" />}
-                  {view.id === 'front' && <Ruler className="h-4 w-4 mr-2" />}
-                  {view.id === 'side' && <Palette className="h-4 w-4 mr-2" />}
-                  {view.id === 'perspective' && <Boxes className="h-4 w-4 mr-2" />}
-                  {view.name}
-                </Button>
-              ))}
-            </div>
+        {analysisResult && !isBusy && (
+          <div className={`border-t pt-4 space-y-4`}>
+            {/* Add any additional content for the analysis result section */}
           </div>
         )}
       </CardContent>
     </Card>
   )
-} 
+}
