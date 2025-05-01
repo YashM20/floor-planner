@@ -1,245 +1,246 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
-import { useFloorPlanStore } from '@/store/floor-plan-store'
-import { ThreeElements, useThree } from '@react-three/fiber'
-import { Text, Box } from '@react-three/drei'
+import { useMemo, useEffect } from 'react'
 import * as THREE from 'three'
+import { Text } from '@react-three/drei'
+// import { CSG } from 'three-bvh-csg' // Import CSG if needed later for openings
+import { useFloorPlanStore } from '@/store/use-floor-plan-store'
+import type { Room, WallSegment, Point } from '@/types/floor-plan'
 
 type FloorPlan3DProps = {
   wireframe?: boolean
-} & ThreeElements['group']
+}
 
 type TextureMap = {
   [key: string]: THREE.Texture
 }
 
-export function FloorPlan3D({ wireframe = false, ...props }: FloorPlan3DProps) {
-  const { roomsData, wallHeight, floorStyle, wallStyle, selectedRoom } = useFloorPlanStore()
-  
-  // Create fallback textures instead of trying to load external files
-  const fallbackFloorTexture = useMemo(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width = 256
-    canvas.height = 256
-    const context = canvas.getContext('2d')
-    if (context) {
-      context.fillStyle = '#c9c9c9'
-      context.fillRect(0, 0, 256, 256)
-      context.lineWidth = 2
-      context.strokeStyle = '#a5a5a5'
-      context.beginPath()
-      for (let i = 0; i < 256; i += 32) {
-        context.moveTo(0, i)
-        context.lineTo(256, i)
-        context.moveTo(i, 0)
-        context.lineTo(i, 256)
-      }
-      context.stroke()
+// --- Constants --- 
+const PIXELS_PER_METER = 50 
+const DEFAULT_WALL_THICKNESS_METERS = 0.15
+const UP_AXIS: 'y' | 'z' = 'y' 
+const PLANE_AXES: ['x' | 'y' | 'z', 'x' | 'y' | 'z'] = ['x', 'z'] 
+
+// --- Texture Helper --- 
+function createColoredTexture (color: string): THREE.Texture {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 64
+  const context = canvas.getContext('2d')
+  if (context) {
+    context.fillStyle = color
+    context.fillRect(0, 0, 64, 64)
+    context.fillStyle = 'rgba(0,0,0,0.05)'
+    for (let i = 0; i < 64; i += 8) {
+      context.fillRect(0, i, 64, 1)
+      context.fillRect(i, 0, 1, 64)
     }
-    const texture = new THREE.CanvasTexture(canvas)
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-    texture.repeat.set(0.5, 0.5)
-    return texture
-  }, [])
-  
-  const fallbackWallTexture = useMemo(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width = 256
-    canvas.height = 256
-    const context = canvas.getContext('2d')
-    if (context) {
-      context.fillStyle = '#e0e0e0'
-      context.fillRect(0, 0, 256, 256)
-    }
-    const texture = new THREE.CanvasTexture(canvas)
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-    texture.repeat.set(1, 1)
-    return texture
-  }, [])
-  
-  // Helper function to create colored textures
-  function createColoredTexture(color: string, brightness: number): THREE.Texture {
-    const canvas = document.createElement('canvas')
-    canvas.width = 256
-    canvas.height = 256
-    const context = canvas.getContext('2d')
-    if (context) {
-      context.fillStyle = color
-      context.fillRect(0, 0, 256, 256)
-      
-      // Add some noise for texture
-      for (let i = 0; i < 5000; i++) {
-        const x = Math.random() * 256
-        const y = Math.random() * 256
-        const gray = Math.random() * 30 - 15
-        context.fillStyle = `rgba(${gray},${gray},${gray},0.2)`
-        context.fillRect(x, y, 2, 2)
-      }
-    }
-    const texture = new THREE.CanvasTexture(canvas)
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-    texture.repeat.set(2, 2)
-    return texture
   }
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(4, 4)
+  return texture
+}
+
+// --- Geometry Helpers ---
+function worldCoords(p: Point, centerX: number, centerY: number, scale: number): THREE.Vector3 {
+  const worldX = (p.x - centerX) / scale
+  const worldZ = (p.y - centerY) / scale // Assuming y in 2D maps to z in 3D
   
-  // Create custom colored textures based on style names
-  const floorTextures = useMemo<TextureMap>(() => {
-    return {
-      wooden: createColoredTexture('#a1662f', 0.8),
-      tile: createColoredTexture('#d9d9d9', 0.95),
-      marble: createColoredTexture('#f5f5f5', 0.9),
-      concrete: createColoredTexture('#9e9e9e', 0.85),
-      carpet: createColoredTexture('#6d4c41', 0.7),
-    }
-  }, [])
-  
-  const wallTextures = useMemo<TextureMap>(() => {
-    return {
-      white: createColoredTexture('#ffffff', 0.95),
-      beige: createColoredTexture('#f5f5dc', 0.92),
-      gray: createColoredTexture('#9e9e9e', 0.9),
-      brick: createColoredTexture('#bc4c2a', 0.8),
-      wallpaper: createColoredTexture('#b3cde0', 0.85),
-    }
-  }, [])
-  
-  // Materials
-  const floorMaterial = useMemo(() => {
-    const texture = floorTextures[floorStyle] || fallbackFloorTexture
-    return new THREE.MeshStandardMaterial({ 
-      map: texture, 
-      wireframe: wireframe,
-      roughness: 0.8,
-      metalness: 0.2
+  const pos = new THREE.Vector3()
+  pos[PLANE_AXES[0]] = worldX
+  pos[UP_AXIS] = 0 // Initially on the ground plane
+  pos[PLANE_AXES[1]] = worldZ
+  return pos
+}
+
+// --- Main Component --- 
+export function FloorPlan3D ({ wireframe = false }: FloorPlan3DProps) {
+  const {
+    analysisResult,
+    wallHeight, // User-defined height
+    selectedFloorStyle,
+    selectedWallStyle,
+  } = useFloorPlanStore()
+
+  useEffect(() => {
+    console.log('[FloorPlan3D] Rendering with detailed analysis:', {
+      hasAnalysisResult: !!analysisResult,
+      roomsCount: analysisResult?.rooms?.length || 0,
+      wallsCount: analysisResult?.walls?.length || 0,
+      doorsCount: analysisResult?.doors?.length || 0,
+      windowsCount: analysisResult?.windows?.length || 0,
+      wallHeight,
+      selectedFloorStyle,
+      selectedWallStyle,
+      wireframe
     })
-  }, [floorTextures, floorStyle, wireframe, fallbackFloorTexture])
-  
-  const wallMaterial = useMemo(() => {
-    const texture = wallTextures[wallStyle] || fallbackWallTexture
-    return new THREE.MeshStandardMaterial({ 
-      map: texture, 
-      wireframe: wireframe,
-      roughness: 0.9,
-      metalness: 0.1
-    })
-  }, [wallTextures, wallStyle, wireframe, fallbackWallTexture])
-  
-  // Generate room meshes
-  const rooms = useMemo(() => {
-    return roomsData.map((room) => {
-      const isSelected = selectedRoom === room.id
+  }, [analysisResult, wallHeight, selectedFloorStyle, selectedWallStyle, wireframe])
+
+  const roomsData = analysisResult?.rooms || []
+  const wallsData = analysisResult?.walls || []
+  const doorsData = analysisResult?.doors || []
+  const windowsData = analysisResult?.windows || []
+  const overallDim = analysisResult?.overallDimensions
+  const scale = analysisResult?.scale || PIXELS_PER_METER
+
+  // --- Materials --- 
+  const floorTextures = useMemo<TextureMap>(() => ({
+    wood_light: createColoredTexture('#d4a77a'),
+    paint_white: createColoredTexture('#e0e0e0')
+  }), [])
+
+  const wallTextures = useMemo<TextureMap>(() => ({
+    wood_light: createColoredTexture('#d4a77a'),
+    paint_white: createColoredTexture('#f0f0f0')
+  }), [])
+
+  const floorMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+    map: floorTextures[selectedFloorStyle] || floorTextures.wood_light,
+    side: THREE.DoubleSide,
+    roughness: 0.8, metalness: 0.1, wireframe
+  }), [selectedFloorStyle, floorTextures, wireframe])
+
+  const wallMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+    map: wallTextures[selectedWallStyle] || wallTextures.paint_white,
+    side: THREE.DoubleSide,
+    roughness: 0.9, metalness: 0.05, wireframe
+  }), [selectedWallStyle, wallTextures, wireframe])
+
+  // --- Geometry Generation --- 
+  const floorMeshes = useMemo(() => {
+    if (!analysisResult || !overallDim || roomsData.length === 0) return []
+    console.log(`[FloorPlan3D] Generating ${roomsData.length} floor meshes...`)
+
+    const centerX = overallDim.width / 2
+    const centerY = overallDim.height / 2
+
+    return roomsData.map((room: Room, index: number) => {
+      if (!room.polygon || room.polygon.length < 3) return null
+
+      const shapePoints = room.polygon.map(p => {
+        const wc = worldCoords(p, centerX, centerY, scale)
+        // Use the X and Z components for the 2D shape
+        return new THREE.Vector2(wc[PLANE_AXES[0]], wc[PLANE_AXES[1]])
+      })
+      const roomShape = new THREE.Shape(shapePoints)
+      const floorGeometry = new THREE.ShapeGeometry(roomShape)
       
-      // Floor - always at y=0
-      const floor = (
-        <Box
-          key={`floor-${room.id}`}
-          args={[room.width, 0.1, room.length]} // width, height, depth
-          position={[room.position.x, 0, room.position.z]}
-          material={floorMaterial}
-          receiveShadow
-        >
-          {/* Optional floor label */}
-          {isSelected && (
-            <Text
-              position={[0, 0.06, 0]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              fontSize={0.3}
-              color="#000000"
-              anchorX="center"
-              anchorY="middle"
-            >
-              {room.type}
-            </Text>
-          )}
-        </Box>
-      )
-      
-      // Walls
-      const wallThickness = 0.15
-      const halfWidth = room.width / 2
-      const halfLength = room.length / 2
-      const halfHeight = wallHeight / 2
-      
-      // North wall (along positive Z)
-      const northWall = (
-        <Box
-          key={`north-wall-${room.id}`}
-          args={[room.width, wallHeight, wallThickness]}
-          position={[
-            room.position.x,
-            halfHeight,
-            room.position.z + halfLength
-          ]}
-          material={wallMaterial}
-          castShadow
-          receiveShadow
-        />
-      )
-      
-      // South wall (along negative Z)
-      const southWall = (
-        <Box
-          key={`south-wall-${room.id}`}
-          args={[room.width, wallHeight, wallThickness]}
-          position={[
-            room.position.x,
-            halfHeight,
-            room.position.z - halfLength
-          ]}
-          material={wallMaterial}
-          castShadow
-          receiveShadow
-        />
-      )
-      
-      // East wall (along positive X)
-      const eastWall = (
-        <Box
-          key={`east-wall-${room.id}`}
-          args={[wallThickness, wallHeight, room.length]}
-          position={[
-            room.position.x + halfWidth,
-            halfHeight,
-            room.position.z
-          ]}
-          material={wallMaterial}
-          castShadow
-          receiveShadow
-        />
-      )
-      
-      // West wall (along negative X)
-      const westWall = (
-        <Box
-          key={`west-wall-${room.id}`}
-          args={[wallThickness, wallHeight, room.length]}
-          position={[
-            room.position.x - halfWidth,
-            halfHeight,
-            room.position.z
-          ]}
-          material={wallMaterial}
-          castShadow
-          receiveShadow
-        />
-      )
-      
+      const floorPosition = new THREE.Vector3() // Positioned at world origin initially
+      const floorRotation = new THREE.Euler()
+      // Rotate floor to lie flat on XZ plane if UP_AXIS is Y
+      if (UP_AXIS === 'y') {
+         floorRotation.x = -Math.PI / 2
+      } else { 
+        // Handle other UP_AXIS if needed
+      }
+
+      // Calculate center for label
+      const center2D = room.center || { x: centerX, y: centerY }
+      const center3D = worldCoords(center2D, centerX, centerY, scale)
+      center3D[UP_AXIS] = wallHeight / 2 // Position label in the middle of the room height
+
       return (
-        <group key={room.id}>
-          {floor}
-          {northWall}
-          {southWall}
-          {eastWall}
-          {westWall}
+        <group key={room.id || `room-${index}`}>
+          <mesh 
+            geometry={floorGeometry} 
+            material={floorMaterial} 
+            position={floorPosition} 
+            rotation={floorRotation}
+            receiveShadow 
+          />
+          <Text
+            position={center3D}
+            fontSize={0.2 * (scale / PIXELS_PER_METER)}
+            color="#333333"
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.01}
+            outlineColor="#ffffff"
+          >
+            {room.name || 'Room'}
+          </Text>
         </group>
       )
-    })
-  }, [roomsData, wallHeight, floorMaterial, wallMaterial, selectedRoom])
-  
+    }).filter(Boolean)
+
+  }, [analysisResult, overallDim, roomsData, scale, floorMaterial, wallHeight])
+
+  const wallMeshes = useMemo(() => {
+    if (!analysisResult || !overallDim || wallsData.length === 0) return []
+    console.log(`[FloorPlan3D] Generating ${wallsData.length} wall meshes...`)
+
+    const centerX = overallDim.width / 2
+    const centerY = overallDim.height / 2
+
+    return wallsData.map((wall: WallSegment, index: number) => {
+      const start = worldCoords(wall.start, centerX, centerY, scale)
+      const end = worldCoords(wall.end, centerX, centerY, scale)
+      
+      const length = start.distanceTo(end)
+      const thickness = (wall.thickness || (DEFAULT_WALL_THICKNESS_METERS * scale)) / scale
+      
+      if (length === 0) {
+         console.warn(`[FloorPlan3D] Wall ${wall.id || index} has zero length.`)
+         return null
+      }
+
+      // Create a simple box geometry for the wall
+      // Dimensions: length, height, thickness
+      const wallGeometry = new THREE.BoxGeometry(length, wallHeight, thickness)
+
+      // Calculate wall center position
+      const wallCenter = new THREE.Vector3().lerpVectors(start, end, 0.5)
+      wallCenter[UP_AXIS] = wallHeight / 2 // Center the wall vertically
+
+      // Calculate rotation angle
+      const angle = Math.atan2(
+        end[PLANE_AXES[1]] - start[PLANE_AXES[1]],
+        end[PLANE_AXES[0]] - start[PLANE_AXES[0]]
+      )
+      const wallRotation = new THREE.Euler()
+      wallRotation[UP_AXIS] = angle // Rotate around the UP_AXIS
+
+      // TODO: Implement openings using CSG or other methods
+      // For now, just render the solid wall
+
+      return (
+        <mesh
+          key={wall.id || `wall-${index}`}
+          geometry={wallGeometry}
+          material={wallMaterial}
+          position={wallCenter}
+          rotation={wallRotation}
+          castShadow
+          receiveShadow
+        />
+      )
+    }).filter(Boolean)
+
+  }, [analysisResult, overallDim, wallsData, scale, wallMaterial, wallHeight])
+
+
+  // --- Final Render --- 
   return (
-    <group {...props}>
-      {rooms}
+    <group position={[0, 0, 0]}> {/* Group to hold everything */}
+      {/* --- Add a Ground Plane for Reference --- */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#888888" side={THREE.DoubleSide} />
+      </mesh>
+      
+      {floorMeshes}
+      {wallMeshes}
+      
+      {/* TODO: Render Doors and Windows */}
+      
+      {/* Remove the old test cube */}
+      {/* 
+      <mesh position={[0, wallHeight / 2, 0]}> 
+        <boxGeometry args={[1, 1, 1]} /> 
+        <meshStandardMaterial color="red" wireframe={false} />
+      </mesh>
+      */}
     </group>
   )
 } 

@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense } from 'react'
-import { useFloorPlanStore } from '@/store/floor-plan-store'
+import { Suspense, useEffect } from 'react'
+import { useFloorPlanStore } from '@/store/use-floor-plan-store'
 import { Canvas } from '@react-three/fiber'
 import { 
   OrbitControls, 
@@ -18,31 +18,43 @@ import { ImageIcon, Loader2 } from 'lucide-react'
 
 export function FloorPlanRenderer() {
   const { 
-    floorPlanImage, 
-    is3DGenerated, 
-    wireframeMode, 
-    currentView, 
+    uploadedImage,
     isProcessing,
-    roomsData
+    analysisResult,
+    wireframeMode, 
+    currentView,
   } = useFloorPlanStore()
+
+  // Debug render conditions
+  useEffect(() => {
+    console.log('[Renderer] Rendering state:', {
+      hasUploadedImage: !!uploadedImage,
+      isProcessing,
+      analysisResultAvailable: !!analysisResult,
+      roomsCount: analysisResult?.rooms?.length || 0,
+      wireframeMode,
+      currentView,
+      renderingMode: analysisResult && analysisResult.rooms.length > 0 ? '3D' : '2D'
+    })
+  }, [uploadedImage, isProcessing, analysisResult, wireframeMode, currentView])
 
   // Set up camera positions for different views
   const getCameraProps = () => {
     switch (currentView) {
       case 'top':
-        return { position: [0, 20, 0], fov: 50 }
+        return { position: [0, 20, 0] as [number, number, number], fov: 50 }
       case 'front':
-        return { position: [0, 1.6, 15], fov: 50 }
+        return { position: [0, 1.6, 15] as [number, number, number], fov: 50 }
       case 'side':
-        return { position: [15, 1.6, 0], fov: 50 }
+        return { position: [15, 1.6, 0] as [number, number, number], fov: 50 }
       case 'perspective':
       default:
-        return { position: [10, 10, 10], fov: 50 }
+        return { position: [10, 10, 10] as [number, number, number], fov: 50 }
     }
   }
 
   // Display empty state if no image has been uploaded
-  if (!floorPlanImage) {
+  if (!uploadedImage) {
     return (
       <Card className=" flex-1 w-full h-full flex items-center justify-center">
         <div className="flex flex-col items-center text-muted-foreground p-4">
@@ -72,19 +84,19 @@ export function FloorPlanRenderer() {
   }
 
   // Display 2D image while waiting for 3D generation
-  if (!is3DGenerated) {
+  if (!analysisResult || analysisResult.rooms.length === 0) {
     return (
       <Card className="w-full h-full flex items-center justify-center overflow-hidden">
         <div className="relative w-full h-full">
           <img 
-            src={floorPlanImage} 
+            src={uploadedImage} 
             alt="Floor Plan" 
             className="w-full h-full object-contain"
           />
-          {roomsData.length > 0 && (
+          {analysisResult && analysisResult.rooms.length > 0 && (
             <div className="absolute bottom-4 left-4 right-4 bg-background/80 backdrop-blur-sm rounded-lg p-3">
               <p className="text-sm">
-                {roomsData.length} rooms detected. Click "Generate 3D Model" to continue.
+                {analysisResult.rooms.length} rooms detected. Click "Generate 3D Model" to continue.
               </p>
             </div>
           )}
@@ -93,7 +105,7 @@ export function FloorPlanRenderer() {
     )
   }
 
-  // Render the 3D floor plan
+  // Render the 3D floor plan when analysis result is available
   return (
     <Card className="flex flex-1 w-full h-full overflow-hidden">
       <div className="flex flex-1 w-full h-full">

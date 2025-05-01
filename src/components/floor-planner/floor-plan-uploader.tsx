@@ -1,135 +1,153 @@
 'use client'
 
 import { useState } from 'react'
-import { useFloorPlanStore } from '@/store/floor-plan-store'
+import { useFloorPlanStore } from '@/store/use-floor-plan-store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
-import { Upload } from 'lucide-react'
+import { Upload, X } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function FloorPlanUploader() {
+  const {
+    uploadedImage,
+    setUploadedImage,
+    setAnalysisResult
+  } = useFloorPlanStore()
+
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const { floorPlanImage, setFloorPlanImage, setRoomsData, resetFloorPlan } = useFloorPlanStore()
 
-  // Simulate file upload with progress
+  const handleRemovePlan = () => {
+    setUploadedImage(null)
+    setAnalysisResult(null)
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    
-    // Reset any existing floor plan
-    resetFloorPlan()
-    
-    // Start upload simulation
+
+    handleRemovePlan() // Clear previous state
+
     setUploading(true)
-    
+    setUploadProgress(0)
     const reader = new FileReader()
-    
-    // Simulate progress updates
+
     const interval = setInterval(() => {
       setUploadProgress(prev => {
-        const newProgress = prev + 5
+        const newProgress = prev + 10
         if (newProgress >= 100) {
           clearInterval(interval)
           return 100
         }
         return newProgress
       })
-    }, 100)
-    
+    }, 50)
+
+    reader.onerror = () => {
+      console.error('Error reading file')
+      clearInterval(interval)
+      setUploading(false)
+      setUploadProgress(0)
+      toast.error('Failed to read the selected file.') // Added toast feedback
+    }
+
     reader.onload = (event) => {
-      // Clear interval when done
       clearInterval(interval)
       setUploadProgress(100)
-      
-      // Set the image in the store
       const imageUrl = event.target?.result as string
-      setFloorPlanImage(imageUrl)
-      
-      // Complete upload
+      if (imageUrl) {
+        setUploadedImage(imageUrl)
+      } else {
+        console.error('File reader result was null')
+        toast.error('Failed to load the image preview.') // Added toast feedback
+      }
       setTimeout(() => {
         setUploading(false)
         setUploadProgress(0)
-      }, 500)
+      }, 300)
     }
-    
+
     reader.readAsDataURL(file)
   }
 
   return (
-    <Card className="flex ">
+    <Card>
       <CardHeader>
-        <CardTitle>Upload Floor Plan</CardTitle>
+        <CardTitle>1. Upload Floor Plan</CardTitle>
         <CardDescription>
-          Upload a floor plan image to begin the conversion process
+          Select an image file (PNG, JPG, WEBP) to begin.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {floorPlanImage ? (
+        {uploadedImage ? (
           <div className="space-y-4">
-            <div className="relative aspect-video rounded-md overflow-hidden border">
-              <img 
-                src={floorPlanImage} 
-                alt="Floor Plan" 
-                className="w-full h-full object-contain" 
+            <div className="relative aspect-video rounded-md overflow-hidden border bg-muted/20">
+              <img
+                src={uploadedImage}
+                alt="Floor Plan Preview"
+                className="w-full h-full object-contain p-1"
               />
             </div>
-            <div className="flex justify-between">
-              <Button 
-                variant="outline" 
-                onClick={() => resetFloorPlan()}
+            <div className="flex justify-between gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRemovePlan}
               >
-                Remove Plan
+                <X className="mr-2 h-4 w-4" />
+                Remove
               </Button>
               <Button
                 variant="default"
+                size="sm"
                 onClick={() => document.getElementById('floor-plan-upload')?.click()}
               >
+                <Upload className="mr-2 h-4 w-4" />
                 Replace
               </Button>
+              <Input
+                id="floor-plan-upload"
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                className="hidden"
+                onChange={handleFileChange}
+              />
             </div>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md bg-muted/50">
-              <Upload className="h-10 w-10 text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground mb-1">
-                Drag and drop your floor plan image
-              </p>
-              <p className="text-xs text-muted-foreground">
-                or click to browse
-              </p>
-            </div>
-            
-            <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="floor-plan-upload" className="sr-only">
-                Upload Floor Plan
-              </Label>
-              <Input
-                id="floor-plan-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <Button 
-                variant="default" 
-                className="w-full"
-                onClick={() => document.getElementById('floor-plan-upload')?.click()}
-              >
-                Upload Floor Plan
-              </Button>
-            </div>
+            <Label
+              htmlFor="floor-plan-upload-area"
+              className="cursor-pointer block"
+            >
+              <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-md hover:border-primary transition-colors bg-muted/50">
+                <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-sm text-primary font-medium mb-1">
+                  Click to Upload or Drag & Drop
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  PNG, JPG, WEBP supported
+                </p>
+              </div>
+            </Label>
+            <Input
+              id="floor-plan-upload-area"
+              type="file"
+              accept="image/png, image/jpeg, image/webp"
+              className="hidden"
+              onChange={handleFileChange}
+            />
           </div>
         )}
         
         {uploading && (
-          <div className="space-y-2">
-            <Progress value={uploadProgress} />
+          <div className="space-y-2 pt-2">
+            <Progress value={uploadProgress} className="h-2" />
             <p className="text-xs text-center text-muted-foreground">
-              Uploading... {uploadProgress}%
+              Loading preview... {uploadProgress}%
             </p>
           </div>
         )}
