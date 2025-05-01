@@ -1,0 +1,19 @@
+# Textures Directory
+
+This directory is a placeholder for texture files for the 3D floor plan renderer.
+
+In the current implementation, we're using dynamically generated textures created with HTML Canvas
+instead of loading external image files. This approach avoids issues with missing texture files
+and reduces the overall application size.
+
+If you want to use actual image textures in the future, you could place them here:
+- floor-wooden.jpg
+- floor-tile.jpg
+- floor-marble.jpg
+- floor-concrete.jpg
+- floor-carpet.jpg
+- wall-white.jpg
+- wall-beige.jpg
+- wall-gray.jpg
+- wall-brick.jpg
+- wall-wallpaper.jpg 
