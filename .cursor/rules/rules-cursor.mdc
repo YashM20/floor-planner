@@ -1,0 +1,300 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Technical Development Guidelines
+
+You are an expert in JavaScript, TypeScript, React, Node.js, Next.js App Router, Zustand, Shadcn UI, Radix UI, Tailwind v4, and Three.js.
+
+## Architecture and Organization
+
+- Create a modular architecture separating concerns (data, UI, business logic)
+- Organize components by domain and functionality
+- Use a clear state management approach for application state
+- Follow the Model-View-Controller pattern where applicable
+
+## Code Style and Structure
+- Write concise, technical JavaScript code following Standard.js rules
+- Use functional and declarative programming patterns; avoid classes except for Three.js components
+- Prefer iteration and modularization over code duplication
+- Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError)
+- Structure files: exported component, subcomponents, helpers, static content
+- Use arrow functions for function declarations
+- Use PascalCase for function names, especially component functions
+
+## Standard.js Rules
+- Use 2 space indentation
+- Use single quotes for strings except to avoid escaping
+- No unused variables
+- Add a space after keywords
+- Add a space before a function declaration's parentheses
+- Always use === instead of ==
+- Infix operators must be spaced
+- Commas should have a space after them
+- Keep else statements on the same line as their curly braces
+- For multi-line if statements, use curly braces
+- Always handle the err function parameter
+- Use camelCase for variables and functions
+- Use PascalCase for constructors and React components
+
+## Project Structure and Organization
+
+### Root Directory Structure
+- `/src` - All application source code
+  - `/app` - Next.js App Router routes and layouts
+  - `/components` - Reusable UI components
+  - `/lib` - Utility functions, configuration, and shared code
+  - `/hooks` - Custom React hooks
+  - `/types` - TypeScript type definitions
+  - `/styles` - Global styles and Tailwind configuration
+  - `/store` - Zustand stores and state management
+  - `/api` - API route handlers and external API clients
+  - `/contexts` - React context definitions
+  - `/constants` - Application constants and enumerations
+  - `/services` - Business logic and external service integrations
+
+### App Router Organization
+- Follow Next.js App Router conventions:
+  - `page.tsx` - Route UI
+  - `layout.tsx` - Layout wrapper for routes
+  - `loading.tsx` - Loading UI
+  - `error.tsx` - Error handling UI
+  - `not-found.tsx` - 404 page
+  - `route.ts` - API route handlers
+- Organize routes by domain/feature:
+  - `/app/(auth)/login/page.tsx`
+  - `/app/(auth)/register/page.tsx`
+  - `/app/(dashboard)/dashboard/page.tsx`
+  - `/app/(dashboard)/dashboard/[id]/page.tsx`
+
+### Component Organization
+- Organize by domain and responsibility:
+  - `/components/ui` - General UI components
+  - `/components/[feature-name]` - Feature-specific components
+  - `/components/layout` - Layout components
+  - `/components/forms` - Form-related components
+  - `/components/[domain]` - Domain-specific components
+
+### Component File Organization
+- Don't use index files for public API exports
+- Separate components into individual files
+- Group related components in folders
+- Include barrel exports for module directories
+
+### File Naming Conventions
+- Use dash-case (kebab-case) for directories and files (`components/user-profile`, `utils/format-date.ts`)
+- Hooks: camelCase prefixed with 'use' (`useAuth.ts`, `useWindowSize.ts`)
+- Zustand stores: camelCase suffixed with 'Store' (`useUserStore.ts`, `useCartStore.ts`)
+
+### Import Organization
+- Group imports in the following order:
+  1. React and Next.js imports
+  2. External library imports
+  3. Internal absolute imports
+  4. Internal relative imports
+  5. Types and interfaces
+  6. CSS/style imports
+- Use explicit imports over wildcard imports
+- Prefer named exports over default exports for better refactoring support
+
+## Naming Conventions
+- Use dash-case (kebab-case) for directories and filenames (e.g., components/feature-name)
+- Use camelCase for variables
+- Use PascalCase for component functions and constructors
+- Favor named exports for components
+- Use consistent naming for objects and resources
+
+## Component Development Practices
+
+### Shadcn UI Components
+- Do not modify shadcn components directly
+- Use shadcn components as references or building blocks
+- Create new composite components that use shadcn components internally
+- Extend functionality by wrapping shadcn components, not changing them
+- If customization is needed, use the provided theming system or create a new component
+
+### External Resources
+- Use picsum.photos for placeholder images (or similar public image services)
+- For icons, use existing libraries like Lucide React before creating custom icons
+- Search for existing libraries, tools, or utilities before building custom solutions
+- Prefer established, well-maintained libraries with TypeScript support
+- Document all external dependencies and their usage
+
+## React and Three.js Best Practices
+- Use functional components with prop-types for type checking
+- Use the "function" keyword for component definitions
+- Implement hooks correctly (useState, useEffect, useContext, useReducer, useMemo, useCallback)
+- Follow the Rules of Hooks (only call hooks at the top level, only call hooks from React functions)
+- Create custom hooks to extract reusable component logic
+- Use React.memo() for component memoization when appropriate
+- Implement useCallback for memoizing functions passed as props
+- Use useMemo for expensive computations, especially in 3D rendering
+- Avoid inline function definitions in render to prevent unnecessary re-renders
+- Prefer composition over inheritance
+- Use children prop and render props pattern for flexible, reusable components
+- Implement React.lazy() and Suspense for code splitting
+- Use refs sparingly and mainly for DOM access or Three.js canvas interactions
+- Prefer controlled components over uncontrolled components
+- Implement error boundaries to catch and handle errors gracefully
+- Use cleanup functions in useEffect to prevent memory leaks
+- Use short-circuit evaluation and ternary operators for conditional rendering
+
+## State Management
+- Use Zustand for global state management
+- Create separate stores for different domains of state
+- Lift state up when needed to share state between components
+- Use context for intermediate state sharing when prop drilling becomes cumbersome
+- Implement undo/redo functionality where appropriate
+
+## Three.js Implementation
+- Separate business logic from rendering logic
+- Use Three.js with react-three-fiber for 3D rendering
+- Implement proper camera controls for interactive 3D scenes
+  - `/components/[featureName]` - Feature-specific components
+- Use raycasting for interactive elements within the 3D scene
+- Implement level-of-detail techniques for complex scenes
+- Use react-three/drei helpers for common 3D needs
+- Consider WebGL capabilities and provide fallbacks
+
+## UI and Styling
+- Use Shadcn UI and Radix UI for component foundations
+- Implement responsive design with Tailwind CSS; use a mobile-first approach
+- Create consistent UI patterns across the application
+- Optimize UI controls for complex interactions
+- Provide clear visual feedback during processing/loading
+- Implement a consistent theming system
+- Create intuitive controls for user interactions
+
+## UI Design Requirements
+
+### Visual Design
+- Develop a cohesive design system with consistent components
+- Create a balanced color palette with primary, secondary, and neutral tones
+- Implement a typographic hierarchy that enhances readability
+- Design with accessibility in mind (WCAG AA compliance)
+- Maintain visual consistency across all screens and components
+- Incorporate appropriate white space for visual breathing room
+
+### User Experience
+- Design intuitive navigation and user flows
+- Create clear visual hierarchies to guide users' attention
+- Ensure responsive design across desktop, tablet, and mobile devices
+- Optimize for performance and fast loading times
+- Implement appropriate feedback mechanisms for user actions
+- Design for progressive disclosure where appropriate
+
+## Performance Optimization
+- Minimize 'use client', 'useEffect', and 'useState'; favor React Server Components (RSC)
+- Wrap client components in Suspense with fallback
+- Use dynamic loading for non-critical components
+- Optimize images: use WebP format, include size data, implement lazy loading
+- Implement route-based code splitting in Next.js
+- Minimize the use of global styles; prefer modular, scoped styles
+- Use PurgeCSS with Tailwind to remove unused styles in production
+- Optimize Three.js rendering with frustum culling, instancing, and object pooling
+- Use Web Workers for intensive processing tasks
+- Implement progressive loading of 3D assets
+- Monitor and optimize memory usage with large 3D scenes or datasets
+- Use camelCase for directories and filenames (e.g., components/featureName)
+
+## Forms and Validation
+- Use controlled components for form inputs
+- Implement form validation (client-side and server-side)
+- Use consistent naming for objects and resources
+- Use Zod for schema validation
+- Provide clear error messages for invalid inputs
+
+## Error Handling and Validation
+- Prioritize error handling and edge cases
+- Handle errors and edge cases at the beginning of functions
+- Use early returns for error conditions to avoid deeply nested if statements
+- Place the happy path last in the function for improved readability
+- Avoid unnecessary else statements; use if-return pattern instead
+- Use guard clauses to handle preconditions and invalid states early
+- Implement proper error logging and user-friendly error messages
+- Model expected errors as return values in Server Actions
+- Gracefully handle rendering failures and WebGL limitations
+
+## Accessibility
+- Use semantic HTML elements
+- Implement proper ARIA attributes
+- Ensure keyboard navigation support
+- Provide alternative experiences for users without WebGL support
+- Include text descriptions of interactive elements
+- Consider color blind users in your design
+
+## Security
+- Sanitize user inputs to prevent XSS attacks
+- Use dangerouslySetInnerHTML sparingly and only with sanitized content
+- Implement proper file validation for uploads
+- Set appropriate CORS policies for resources
+
+## Key Conventions
+- Use 'nuqs' for URL search parameter state management
+- Optimize Web Vitals (LCP, CLS, FID)
+- Limit 'use client':
+  - Favor server components and Next.js SSR
+  - Use only for Web API access in small components
+  - Avoid for data fetching or state management except for client-side only features
+
+Follow Next.js docs for Data Fetching, Rendering, and Routing, and Three.js documentation for 3D-specific implementations.-
+-
+
+## Reference Documentation
+
+### Next.js
+- [Next.js Documentation](https://nextjs.org/docs) - Official Next.js documentation
+- [App Router Documentation](https://nextjs.org/docs/app) - App Router specific documentation
+- [Project Structure](https://nextjs.org/docs/app/getting-started/project-structure) - Learn about project organization
+- [Data Fetching](https://nextjs.org/docs/app/building-your-application/data-fetching) - Data fetching strategies
+- [Routing](https://nextjs.org/docs/app/building-your-application/routing) - App Router routing system
+- [Server Components](https://nextjs.org/docs/app/building-your-application/rendering/server-components) - React Server Components
+- [Client Components](https://nextjs.org/docs/app/building-your-application/rendering/client-components) - Client-side React components
+
+### React
+- [React Documentation](https://react.dev/learn) - Official React documentation
+- [Learn React](https://react.dev/learn/thinking-in-react) - Learn React from scratch
+- [Hooks Reference](https://react.dev/reference/react) - Complete hooks API reference
+- [React API](https://react.dev/reference/react/apis) - React API documentation
+
+### Three.js and 3D
+- [Three.js Documentation](https://threejs.org/docs/index.html) - Official Three.js documentation
+- [React Three Fiber](https://docs.pmnd.rs/react-three-fiber) - React renderer for Three.js
+- [Drei](https://github.com/pmndrs/drei) - Useful helpers for React Three Fiber
+- [React Three Rapier](https://github.com/pmndrs/react-three-rapier) - Physics for your React Three Fiber components
+
+### State Management
+- [Zustand Documentation](https://docs.pmnd.rs/zustand/getting-started/introduction) - Zustand state management
+- [React Context](https://react.dev/learn/passing-data-deeply-with-context) - React Context API
+
+### UI Components
+- [Shadcn UI](https://ui.shadcn.com/docs) - Re-usable UI components
+- [Radix UI](https://www.radix-ui.com/primitives/docs/overview/introduction) - Unstyled, accessible UI components
+- [Lucide React](https://lucide.dev/guide/packages/lucide-react) - Beautiful open-source icons
+
+### Styling
+- [Tailwind CSS](https://tailwindcss.com/docs) - Utility-first CSS framework
+- [Tailwind CSS v4](https://tailwindcss.com/blog/tailwindcss-v4-alpha) - Latest Tailwind CSS features
+
+### Validation and Forms
+- [Zod](https://zod.dev/) - TypeScript-first schema validation
+- [React Hook Form](https://react-hook-form.com/get-started) - Performant forms with easy validation
+
+### TypeScript
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/) - Official TypeScript documentation
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html) - TypeScript language features
+
+### Testing
+- [Vitest](https://vitest.dev/guide/) - Blazing fast unit test framework
+- [Testing Library](https://testing-library.com/docs/) - Simple and complete testing utilities
+- [Playwright](https://playwright.dev/docs/intro) - End-to-end testing
+
+### Performance
+- [Web Vitals](https://web.dev/vitals/) - Essential metrics for a healthy site
+- [Core Web Vitals](https://web.dev/explore/learn-core-web-vitals) - Google's page experience metrics
+- [Performance Optimization](https://nextjs.org/docs/app/building-your-application/optimizing) - Next.js performance features
+
+### Accessibility
+- [WCAG Guidelines](https://www.w3.org/WAI/standards-guidelines/wcag/) - Web Content Accessibility Guidelines
+- [A11y Project Checklist](https://www.a11yproject.com/checklist/) - Practical accessibility checklist

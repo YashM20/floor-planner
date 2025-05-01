@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+# Dynamic 3D Floor Plan Converter
 
-First, run the development server:
+A web application that converts 2D floor plan images into interactive 3D models.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Upload and process floor plan images
+- Automatic room detection and analysis
+- Interactive 3D model generation
+- Customizable wall height and styling options
+- Multiple view controls (Top, Front, Side, Perspective)
+- Wireframe toggle for detailed inspection
+- Room selection and focus capability
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Upload a Floor Plan**
+   - Click "Upload Floor Plan" button to select an image file
 
-## Learn More
+2. **Process the Image**
+   - Once uploaded, click "Process Plan" to analyze the floor plan
+   - The system will detect rooms and display them in the sidebar
 
-To learn more about Next.js, take a look at the following resources:
+3. **Customize Settings**
+   - Adjust wall height using the slider (1m-5m)
+   - Select floor and wall styles from dropdown menus
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. **Generate 3D Model**
+   - Click "Generate 3D" to create the interactive 3D model
+   - View and interact with your floor plan in 3D space
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. **Control the View**
+   - Use view control buttons (Top, Front, Side, Perspective)
+   - Toggle wireframe mode for structural inspection
+   - Select rooms from the sidebar to focus on specific areas
 
-## Deploy on Vercel
+## Technical Details
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Built with HTML, CSS, and JavaScript
+- Uses Three.js for 3D rendering and visualization
+- Implements OrbitControls for camera manipulation
+- Responsive design with flexible layout
+- Simulated AI processing for room detection (placeholder for real AI implementation)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Implementation
+
+The application follows a simple workflow:
+1. Image upload and preview
+2. Processing and room detection
+3. 3D model generation with walls, floors, doors, and windows
+4. Interactive visualization with camera controls
+
+Each detected room includes:
+- Room type identification
+- Area calculation
+- Dimensions (width × length)
+- Position coordinates
+- Color coding by room type
