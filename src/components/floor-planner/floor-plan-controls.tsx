@@ -204,45 +204,29 @@ export function FloorPlanControls () {
     }
 
     try {
+      // Step 1: Validate the parsed data against the Zod schema
       const validationResult = FloorPlanAnalysisSchema.safeParse(parsedData);
 
+      // Step 2: Check if validation was successful
       if (!validationResult.success) {
-        // Log the raw validation result object AND its properties
-        console.error('[Controls] Zod validation failed.');
-        console.error('[Controls] Raw validationResult object:', validationResult);
-        console.error('[Controls] validationResult.success:', validationResult.success); // Should be false
-        console.error('[Controls] validationResult.error:', validationResult.error); // Should be a ZodError object
-
-        // Attempt to flatten, guarding against missing error property
-        const flatErrors = validationResult.error ? validationResult.error.flatten() : { formErrors: ["Unknown validation error"], fieldErrors: {} };
-        console.error('[Controls] Flattened Zod errors:', flatErrors);
+        // Log the detailed Zod errors to the console for debugging
+        console.error('[Controls] Zod validation failed:', validationResult.error.flatten());
         
-        // Format Zod errors for better display
-        const fieldErrors = flatErrors.fieldErrors;
-        let errorDescription = 'Validation failed: \n';
-        for (const key in fieldErrors) {
-          errorDescription += `- ${key.replace(/_/g, '[').replace(/\.(\d+)\./g, '[$1].')} : ${fieldErrors[key as keyof typeof fieldErrors]?.join(', ')}\n`;
-        }
-        const formErrors = flatErrors.formErrors;
-        if (formErrors.length > 0) {
-           errorDescription += `General errors: ${formErrors.join(', ')}`;
-        }
-        if (!errorDescription.includes('-') && formErrors.length === 0) { // Check if any errors were added
-            errorDescription = "Validation failed: The provided JSON structure doesn't match the expected format.";
-        }
-
-        toast.error('Invalid data structure. Please fix errors:', {
-           description: () => (
-            <pre className="mt-2 whitespace-pre-wrap text-xs font-mono bg-destructive/10 p-2 rounded">
-              {errorDescription}
-            </pre>
-          ),
-          duration: 10000, 
+        // Format a user-friendly error message from Zod issues
+        const errorMessages = validationResult.error.errors.map(
+          (e) => `${e.path.join('.') || 'data'}: ${e.message}`
+        );
+        
+        toast.error('Invalid JSON Data Structure', {
+          description: `The provided data does not match the required format. Errors: ${errorMessages.join('; ')}`,
+          duration: 10000 // Show longer for readability
         });
-        return;
+        // Keep dialog open and input intact for correction
+        return; 
       }
 
       // Step 3: If valid, set it in the store
+      console.log('[Controls] Zod validation successful. Updating store.'); // Add success log
       useFloorPlanStore.setState({
         analysisResult: validationResult.data,
         uploadedImage: null, // Clear uploaded image as we are loading data directly
