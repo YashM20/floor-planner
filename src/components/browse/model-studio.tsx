@@ -46,9 +46,20 @@ export function ModelStudio({ initialScene = sceneExample, initialModel }: Model
   // Get the currently selected model from the scene
   const selectedModel = scene.objects?.find(model => model.id === selectedModelId) || scene.objects?.[0]
   
-  const handleSceneChange = useCallback((updatedScene: Scene) => {
-    setScene(updatedScene)
-  }, [])
+  const handleSceneChange = useCallback((updatedData: Model | Scene) => {
+    // Type guard to check if we received a Scene
+    if ('objects' in updatedData) {
+      // It's a Scene, we can directly set it
+      setScene(updatedData);
+    } else {
+      // It's a Model, we need to wrap it in a Scene
+      const updatedScene: Scene = {
+        ...scene,
+        objects: [updatedData]
+      };
+      setScene(updatedScene);
+    }
+  }, [scene]);
   
   const handleModelChange = useCallback((updatedModel: Model) => {
     // Update the model within the scene

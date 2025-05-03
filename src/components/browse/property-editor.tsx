@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Component, Material, Model, Primitive, Transformation } from './model-schema'
+import { Component, Material, Model, Primitive, Transformation, Vector3, normalizeVector3 } from './model-schema'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
@@ -15,6 +15,47 @@ type PropertyEditorProps = {
   selectedComponentId: string | null
   onModelChange: (updatedModel: Model) => void
 }
+
+// Helper to safely get vector component value whether it's an array or object
+const getVectorValue = (vec: Vector3 | undefined, index: number): number => {
+  if (!vec) return index === 2 ? 0 : 1; // Default values: 1 for scale, 0 for position/rotation
+  
+  if (Array.isArray(vec)) {
+    return vec[index] || 0;
+  }
+  
+  // Object format
+  switch (index) {
+    case 0: return vec.x || 0;
+    case 1: return vec.y || 0;
+    case 2: return vec.z || 0;
+    default: return 0;
+  }
+};
+
+// Helper to update vector value whether it's an array or object
+const updateVectorValue = (vec: Vector3 | undefined, index: number, value: number): Vector3 => {
+  if (!vec) {
+    // Create new vector with default values
+    return index === 0 
+      ? [value, 0, 0]  
+      : index === 1 
+        ? [0, value, 0] 
+        : [0, 0, value];
+  }
+  
+  if (Array.isArray(vec)) {
+    const newVec = [...vec] as [number, number, number];
+    newVec[index] = value;
+    return newVec;
+  }
+  
+  // Object format
+  return {
+    ...vec,
+    [index === 0 ? 'x' : index === 1 ? 'y' : 'z']: value
+  };
+};
 
 export function PropertyEditor({ model, selectedComponentId, onModelChange }: PropertyEditorProps) {
   const [selectedComponent, setSelectedComponent] = useState<Component | null>(null)
@@ -82,13 +123,22 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
     if (!selectedComponent) return
     
     const updatedComponent = structuredClone(selectedComponent)
-    const transforms = [...(updatedComponent.transformation[key] || [0, 0, 0])]
-    transforms[index] = value
     
-    updatedComponent.transformation = {
-      ...updatedComponent.transformation,
-      [key]: transforms as [number, number, number]
+    // Ensure transformation exists
+    if (!updatedComponent.transformation) {
+      updatedComponent.transformation = {
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1]
+      };
     }
+    
+    // Update the vector at the specified index
+    updatedComponent.transformation[key] = updateVectorValue(
+      updatedComponent.transformation[key], 
+      index, 
+      value
+    );
     
     updateComponent(updatedComponent)
   }, [selectedComponent, updateComponent])
@@ -117,6 +167,13 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
       </Card>
     )
   }
+
+  // Ensure component has a transformation object
+  const transformation = selectedComponent.transformation || {
+    position: selectedComponent.position || [0, 0, 0],
+    rotation: selectedComponent.rotation || [0, 0, 0],
+    scale: selectedComponent.scale || [1, 1, 1]
+  };
 
   // Determine which geometry fields to show based on the type
   const showGeometryFields = () => {
@@ -264,7 +321,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="posX" 
                   type="number" 
-                  value={selectedComponent.transformation.position[0]} 
+                  value={getVectorValue(transformation.position, 0)} 
                   step={0.1}
                   onChange={(e) => updateTransform('position', 0, parseFloat(e.target.value))}
                 />
@@ -274,7 +331,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="posY" 
                   type="number" 
-                  value={selectedComponent.transformation.position[1]} 
+                  value={getVectorValue(transformation.position, 1)} 
                   step={0.1}
                   onChange={(e) => updateTransform('position', 1, parseFloat(e.target.value))}
                 />
@@ -284,7 +341,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="posZ" 
                   type="number" 
-                  value={selectedComponent.transformation.position[2]} 
+                  value={getVectorValue(transformation.position, 2)} 
                   step={0.1}
                   onChange={(e) => updateTransform('position', 2, parseFloat(e.target.value))}
                 />
@@ -300,7 +357,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="rotX" 
                   type="number" 
-                  value={selectedComponent.transformation.rotation?.[0] || 0} 
+                  value={getVectorValue(transformation.rotation, 0)} 
                   step={0.1}
                   onChange={(e) => updateTransform('rotation', 0, parseFloat(e.target.value))}
                 />
@@ -310,7 +367,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="rotY" 
                   type="number" 
-                  value={selectedComponent.transformation.rotation?.[1] || 0} 
+                  value={getVectorValue(transformation.rotation, 1)} 
                   step={0.1}
                   onChange={(e) => updateTransform('rotation', 1, parseFloat(e.target.value))}
                 />
@@ -320,7 +377,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="rotZ" 
                   type="number" 
-                  value={selectedComponent.transformation.rotation?.[2] || 0} 
+                  value={getVectorValue(transformation.rotation, 2)} 
                   step={0.1}
                   onChange={(e) => updateTransform('rotation', 2, parseFloat(e.target.value))}
                 />
@@ -336,7 +393,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="scaleX" 
                   type="number" 
-                  value={selectedComponent.transformation.scale?.[0] || 1} 
+                  value={getVectorValue(transformation.scale, 0)} 
                   step={0.1}
                   onChange={(e) => updateTransform('scale', 0, parseFloat(e.target.value))}
                 />
@@ -346,7 +403,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="scaleY" 
                   type="number" 
-                  value={selectedComponent.transformation.scale?.[1] || 1} 
+                  value={getVectorValue(transformation.scale, 1)} 
                   step={0.1}
                   onChange={(e) => updateTransform('scale', 1, parseFloat(e.target.value))}
                 />
@@ -356,7 +413,7 @@ export function PropertyEditor({ model, selectedComponentId, onModelChange }: Pr
                 <Input 
                   id="scaleZ" 
                   type="number" 
-                  value={selectedComponent.transformation.scale?.[2] || 1} 
+                  value={getVectorValue(transformation.scale, 2)} 
                   step={0.1}
                   onChange={(e) => updateTransform('scale', 2, parseFloat(e.target.value))}
                 />

@@ -14,7 +14,8 @@ import {
   AccumulativeShadows,
   RandomizedLight,
   useHelper,
-  SoftShadows
+  SoftShadows,
+  useGLTF
 } from '@react-three/drei'
 import * as THREE from 'three'
 import { Scene, Model, chairExample, sceneExample, normalizeVector3 } from './model-schema'
@@ -89,6 +90,19 @@ function DirectionalLightWithHelper({
   )
 }
 
+// Check if WebGL is available on the device
+const isWebGLAvailable = () => {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext && 
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch (e) {
+    return false;
+  }
+};
+
 type ModelViewerProps = {
   scene?: Scene;
   model?: Model;
@@ -125,6 +139,11 @@ export function ModelViewer({
   softShadows = true
 }: ModelViewerProps) {
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
+  const [webGLAvailable, setWebGLAvailable] = useState(true);
+  
+  useEffect(() => {
+    setWebGLAvailable(isWebGLAvailable());
+  }, []);
   
   // Determine which model(s) to render
   let modelsToRender: Model[] = []
@@ -146,17 +165,56 @@ export function ModelViewer({
     onSelectComponent?.(id)
   }, [onSelectComponent])
 
+  if (!webGLAvailable) {
+    return (
+      <div className="flex items-center justify-center h-full w-full bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-red-700">WebGL Not Available</h3>
+          <p className="text-sm text-red-600 mt-2">
+            Your browser or device doesn't support WebGL, which is required for 3D rendering.
+            Try using a different browser or updating your graphics drivers.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ width, height, position: 'relative' }}>
       <Canvas
         shadows={enableShadows}
-        dpr={[1, 2]} // Responsive pixel ratio
-        camera={{ position: cameraPosition, fov: 50 }}
+        dpr={[1, 2]}
+        camera={{ 
+          position: cameraPosition,
+          fov: 50
+        }}
         gl={{ 
           antialias: true,
+          alpha: true,
+          preserveDrawingBuffer: true,
+          logarithmicDepthBuffer: true,
+          powerPreference: 'high-performance',
           // Improved rendering
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.2
+        }}
+        onCreated={({ gl }) => {
+          gl.setClearColor(new THREE.Color(resolvedBackgroundColor));
+          
+          // Add error handling to detect shader compilation issues
+          const onError = (event: ErrorEvent) => {
+            if (event.message.includes('VALIDATE_STATUS') || 
+                event.message.includes('shader')) {
+              console.error('WebGL Shader Error:', event.message);
+              // Optionally display an error message to the user here
+            }
+          };
+          
+          window.addEventListener('error', onError);
+          
+          return () => {
+            window.removeEventListener('error', onError);
+          };
         }}
       >
         <color attach="background" args={[resolvedBackgroundColor]} />

@@ -1,14 +1,14 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Model } from './model-schema'
+import { Model, Scene } from './model-schema'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
 type JsonEditorProps = {
-  initialJson?: Model
-  onChange?: (model: Model) => void
+  initialJson?: Model | Scene
+  onChange?: (data: Model | Scene) => void
   onError?: (error: Error) => void
 }
 
@@ -51,7 +51,7 @@ export function JsonEditor({ initialJson, onChange, onError }: JsonEditorProps) 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Edit JSON Model</CardTitle>
+        <CardTitle>Edit JSON</CardTitle>
         <CardDescription>Modify the JSON structure to update the 3D model</CardDescription>
       </CardHeader>
       <CardContent>

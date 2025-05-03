@@ -17,115 +17,216 @@ import {
 } from './model-schema'
 import { useGLTF } from '@react-three/drei'
 
-// Map our material types to Three.js materials
-const getMaterialClass = (materialType: MaterialType): any => {
-  switch (materialType) {
-    case 'basic': return THREE.MeshBasicMaterial;
-    case 'phong': return THREE.MeshPhongMaterial;
-    case 'lambert': return THREE.MeshLambertMaterial;
-    // For special materials (wood, metal, etc.) we use MeshStandardMaterial with appropriate settings
-    default: return THREE.MeshStandardMaterial;
+// Helper to map material type to Three.js material class
+const getMaterialClass = (type: MaterialType): typeof THREE.Material => {
+  try {
+    switch (type) {
+      case 'basic':
+        return THREE.MeshBasicMaterial;
+      case 'phong':
+        return THREE.MeshPhongMaterial;
+      case 'lambert':
+        return THREE.MeshLambertMaterial;
+      case 'standard':
+      case 'metal':
+      case 'wood':
+      case 'glass':
+      case 'laminate':
+      case 'fabric':
+      case 'plastic':
+      case 'ceramic':
+      case 'leather':
+        // Check WebGL capabilities before returning MeshStandardMaterial
+        try {
+          // Create a simple test for WebGL capabilities
+          const testCanvas = document.createElement('canvas');
+          const gl = testCanvas.getContext('webgl2') || testCanvas.getContext('webgl');
+          
+          if (!gl) {
+            console.warn('WebGL not available, falling back to MeshPhongMaterial');
+            return THREE.MeshPhongMaterial;
+          }
+          
+          // Check if device has sufficient capabilities for PBR materials
+          const extensions = [
+            'EXT_shader_texture_lod',
+            'WEBGL_draw_buffers'
+          ];
+          
+          const hasRequiredExtensions = extensions.every(ext => 
+            gl.getExtension(ext) !== null
+          );
+          
+          return hasRequiredExtensions ? 
+            THREE.MeshStandardMaterial : 
+            THREE.MeshPhongMaterial;
+        } catch (e) {
+          console.warn('Error checking WebGL capabilities:', e);
+          return THREE.MeshPhongMaterial;
+        }
+      default:
+        return THREE.MeshStandardMaterial;
+    }
+  } catch (error) {
+    console.error('Error in getMaterialClass:', error);
+    return THREE.MeshBasicMaterial; // Ultimate fallback
   }
 };
 
 // Material creation based on material definition
 const createMaterial = (material: Material): THREE.Material => {
-  // Get the appropriate material class
-  const MaterialClass = getMaterialClass(material.type);
-  
-  // Create basic properties common to all materials
-  const materialProps: Record<string, any> = {
-    color: material.color,
-    wireframe: material.wireframe
-  };
-  
-  // For materials that support opacity
-  if (material.opacity !== undefined && material.opacity < 1) {
-    materialProps.transparent = true;
-    materialProps.opacity = material.opacity;
-  }
-  
-  // Add PBR properties for standard materials
-  if (MaterialClass === THREE.MeshStandardMaterial) {
-    // Set defaults based on material type first
-    switch (material.type) {
-      case 'metal':
-        materialProps.metalness = material.metalness ?? 0.9;
-        materialProps.roughness = material.roughness ?? 0.1;
-        break;
-      case 'wood':
-        materialProps.metalness = material.metalness ?? 0.0;
-        materialProps.roughness = material.roughness ?? 0.8;
-        break;
-      case 'glass':
-        materialProps.metalness = material.metalness ?? 0.0;
-        materialProps.roughness = material.roughness ?? 0.1;
-        materialProps.transparent = true;
-        materialProps.opacity = material.opacity ?? 0.5;
-        break;
-      case 'laminate':
-        materialProps.metalness = material.metalness ?? 0.1;
-        materialProps.roughness = material.roughness ?? 0.7;
-        break;
-      case 'fabric':
-        materialProps.metalness = material.metalness ?? 0.0;
-        materialProps.roughness = material.roughness ?? 0.9;
-        break;
-      case 'plastic':
-        materialProps.metalness = material.metalness ?? 0.1;
-        materialProps.roughness = material.roughness ?? 0.5;
-        break;
-      case 'ceramic':
-        materialProps.metalness = material.metalness ?? 0.2;
-        materialProps.roughness = material.roughness ?? 0.2;
-        break;
-      case 'leather':
-        materialProps.metalness = material.metalness ?? 0.0;
-        materialProps.roughness = material.roughness ?? 0.6;
-        break;
-      default:
-        // These will be overridden by any explicitly provided values below
-        materialProps.metalness = 0.5;
-        materialProps.roughness = 0.5;
+  try {
+    // Get the appropriate material class
+    const MaterialClass = getMaterialClass(material.type);
+    
+    // Create basic properties common to all materials
+    const materialProps: Record<string, any> = {
+      color: material.color || '#cccccc',
+      wireframe: material.wireframe || false
+    };
+    
+    // For materials that support opacity
+    if (material.opacity !== undefined && material.opacity < 1) {
+      materialProps.transparent = true;
+      materialProps.opacity = Math.max(0.01, Math.min(1, material.opacity)); // Clamp to valid range
     }
     
-    // Now override with any explicitly provided values
-    if (material.metalness !== undefined) materialProps.metalness = material.metalness;
-    if (material.roughness !== undefined) materialProps.roughness = material.roughness;
-    if (material.clearcoat !== undefined) materialProps.clearcoat = material.clearcoat;
-    if (material.clearcoatRoughness !== undefined) materialProps.clearcoatRoughness = material.clearcoatRoughness;
-  }
-  
-  // Add maps if provided
-  if (material.textureMap) {
-    const textureLoader = new THREE.TextureLoader();
-    materialProps.map = textureLoader.load(material.textureMap);
-  }
-  
-  if (material.normalMap) {
-    const textureLoader = new THREE.TextureLoader();
-    materialProps.normalMap = textureLoader.load(material.normalMap);
-  }
-  
-  if (material.bumpMap) {
-    const textureLoader = new THREE.TextureLoader();
-    materialProps.bumpMap = textureLoader.load(material.bumpMap);
-  }
-  
-  if (material.envMap) {
-    const textureLoader = new THREE.TextureLoader();
-    materialProps.envMap = textureLoader.load(material.envMap);
-  }
-  
-  if (material.emissive) {
-    materialProps.emissive = new THREE.Color(material.emissive);
-    if (material.emissiveIntensity !== undefined) {
-      materialProps.emissiveIntensity = material.emissiveIntensity;
+    // Add PBR properties for standard materials
+    if (MaterialClass === THREE.MeshStandardMaterial) {
+      // Set defaults based on material type first
+      switch (material.type) {
+        case 'metal':
+          materialProps.metalness = 0.9;
+          materialProps.roughness = 0.1;
+          break;
+        case 'wood':
+          materialProps.metalness = 0.0;
+          materialProps.roughness = 0.8;
+          break;
+        case 'glass':
+          materialProps.metalness = 0.0;
+          materialProps.roughness = 0.1;
+          materialProps.transparent = true;
+          materialProps.opacity = material.opacity ?? 0.5;
+          break;
+        case 'laminate':
+          materialProps.metalness = 0.1;
+          materialProps.roughness = 0.7;
+          break;
+        case 'fabric':
+          materialProps.metalness = 0.0;
+          materialProps.roughness = 0.9;
+          break;
+        case 'plastic':
+          materialProps.metalness = 0.1;
+          materialProps.roughness = 0.5;
+          break;
+        case 'ceramic':
+          materialProps.metalness = 0.2;
+          materialProps.roughness = 0.2;
+          break;
+        case 'leather':
+          materialProps.metalness = 0.0;
+          materialProps.roughness = 0.6;
+          break;
+        default:
+          materialProps.metalness = 0.5;
+          materialProps.roughness = 0.5;
+      }
+      
+      // Now override with any explicitly provided values, ensuring they're in valid ranges
+      if (material.metalness !== undefined) {
+        materialProps.metalness = Math.max(0, Math.min(1, material.metalness));
+      }
+      if (material.roughness !== undefined) {
+        materialProps.roughness = Math.max(0, Math.min(1, material.roughness));
+      }
+      
+      // Only add these properties if the value is defined and valid
+      if (material.clearcoat !== undefined && material.clearcoat >= 0) {
+        materialProps.clearcoat = Math.min(1, material.clearcoat);
+      }
+      if (material.clearcoatRoughness !== undefined && material.clearcoatRoughness >= 0) {
+        materialProps.clearcoatRoughness = Math.min(1, material.clearcoatRoughness);
+      }
     }
+    
+    // Add maps if provided - with error handling for loading failures
+    const loadTextureWithFallback = (url: string) => {
+      try {
+        const textureLoader = new THREE.TextureLoader();
+        return textureLoader.load(url, 
+          undefined, 
+          undefined, 
+          (err) => {
+            console.error(`Failed to load texture: ${url}`, err);
+            return undefined;
+          }
+        );
+      } catch (err) {
+        console.error(`Error creating texture loader for: ${url}`, err);
+        return undefined;
+      }
+    };
+    
+    if (material.textureMap) {
+      const texture = loadTextureWithFallback(material.textureMap);
+      if (texture) materialProps.map = texture;
+    }
+    
+    if (material.normalMap) {
+      const texture = loadTextureWithFallback(material.normalMap);
+      if (texture) materialProps.normalMap = texture;
+    }
+    
+    if (material.bumpMap) {
+      const texture = loadTextureWithFallback(material.bumpMap);
+      if (texture) materialProps.bumpMap = texture;
+    }
+    
+    if (material.envMap) {
+      const texture = loadTextureWithFallback(material.envMap);
+      if (texture) materialProps.envMap = texture;
+    }
+    
+    if (material.emissive) {
+      try {
+        materialProps.emissive = new THREE.Color(material.emissive);
+        if (material.emissiveIntensity !== undefined) {
+          materialProps.emissiveIntensity = Math.max(0, material.emissiveIntensity);
+        }
+      } catch (err) {
+        console.error('Invalid emissive color value:', material.emissive);
+      }
+    }
+    
+    // Create the material with try/catch to handle potential shader compilation errors
+    try {
+      // Create the appropriate material type based on the class returned
+      if (MaterialClass === THREE.MeshStandardMaterial) {
+        return new THREE.MeshStandardMaterial(materialProps);
+      } else if (MaterialClass === THREE.MeshPhongMaterial) {
+        return new THREE.MeshPhongMaterial(materialProps);
+      } else if (MaterialClass === THREE.MeshLambertMaterial) {
+        return new THREE.MeshLambertMaterial(materialProps);
+      } else {
+        return new THREE.MeshBasicMaterial(materialProps);
+      }
+    } catch (err) {
+      console.error('Error creating material', err);
+      // Fallback to a simpler material type if standard material fails
+      if (MaterialClass === THREE.MeshStandardMaterial) {
+        console.warn('Falling back to MeshBasicMaterial due to shader compilation error');
+        return new THREE.MeshBasicMaterial({ color: material.color || '#cccccc' });
+      }
+      // Last resort fallback
+      return new THREE.MeshBasicMaterial({ color: '#ff0000' });
+    }
+  } catch (error) {
+    console.error('Error in createMaterial', error);
+    // Ultimate fallback
+    return new THREE.MeshBasicMaterial({ color: '#ff0000' });
   }
-  
-  // Create the material
-  return new MaterialClass(materialProps);
 };
 
 // Create geometry from primitive definition
