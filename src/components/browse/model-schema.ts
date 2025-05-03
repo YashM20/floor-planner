@@ -166,7 +166,47 @@ export const normalizeVector3 = (vec: Vector3): [number, number, number] => {
 export const convertJsonToModel = (jsonData: any): Scene => {
   // Check if the input is already in our internal format
   if (jsonData.objects && Array.isArray(jsonData.objects)) {
-    return jsonData as Scene;
+    // Ensure all objects have IDs
+    const objectsWithIds = jsonData.objects.map((obj: any, index: number) => {
+      if (!obj.id) {
+        obj.id = `object-${index}`;
+      }
+      
+      // Ensure all components have IDs
+      if (obj.components && Array.isArray(obj.components)) {
+        obj.components = obj.components.map((comp: any, compIndex: number) => {
+          if (!comp.id) {
+            comp.id = `component-${obj.id}-${compIndex}`;
+          }
+          return comp;
+        });
+      }
+      
+      // Ensure all groups have IDs
+      if (obj.groups && Array.isArray(obj.groups)) {
+        obj.groups = obj.groups.map((group: any, groupIndex: number) => {
+          if (!group.id) {
+            group.id = `group-${obj.id}-${groupIndex}`;
+          }
+          
+          // Ensure all components within groups have IDs
+          if (group.components && Array.isArray(group.components)) {
+            group.components = group.components.map((comp: any, compIndex: number) => {
+              if (!comp.id) {
+                comp.id = `group-component-${group.id}-${compIndex}`;
+              }
+              return comp;
+            });
+          }
+          
+          return group;
+        });
+      }
+      
+      return obj;
+    });
+    
+    return { ...jsonData, objects: objectsWithIds } as Scene;
   }
 
   // Handle case where the input is the scene structure with nested objects
@@ -176,12 +216,12 @@ export const convertJsonToModel = (jsonData: any): Scene => {
 
     // Process each object in the scene
     if (scene.objects && Array.isArray(scene.objects)) {
-      scene.objects.forEach((obj: any) => {
+      scene.objects.forEach((obj: any, objIndex: number) => {
         const components: Component[] = [];
 
         // Process components for each object
         if (obj.components && Array.isArray(obj.components)) {
-          obj.components.forEach((comp: any) => {
+          obj.components.forEach((comp: any, compIndex: number) => {
             // Create a primitive based on the type
             let geometry: Primitive | CustomGeometry;
             
@@ -218,10 +258,10 @@ export const convertJsonToModel = (jsonData: any): Scene => {
               };
             }
 
-            // Create the component with all properties
+            // Create the component with all properties, ensuring it has an ID
             components.push({
-              id: comp.id,
-              name: comp.name,
+              id: comp.id || `component-${objIndex}-${compIndex}`,
+              name: comp.name || `Component ${compIndex}`,
               geometry: geometry,
               position: comp.position,
               rotation: comp.rotation,
@@ -239,10 +279,10 @@ export const convertJsonToModel = (jsonData: any): Scene => {
           });
         }
 
-        // Add the processed object to the scene
+        // Add the processed object to the scene, ensuring it has an ID
         sceneObjects.push({
-          id: obj.id,
-          name: obj.name || 'Unnamed Object',
+          id: obj.id || `object-${objIndex}`,
+          name: obj.name || `Unnamed Object ${objIndex}`,
           type: (obj.type || 'furniture') as ModelType,
           subtype: obj.subtype,
           position: obj.position,

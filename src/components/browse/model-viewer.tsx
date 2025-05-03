@@ -20,6 +20,7 @@ import {
 import * as THREE from 'three'
 import { Scene, Model, chairExample, sceneExample, normalizeVector3 } from './model-schema'
 import { ModelRenderer } from './model-renderer'
+import { Button } from '@/components/ui/button'
 
 // Loading state component
 function Loader() {
@@ -121,6 +122,53 @@ type ModelViewerProps = {
   softShadows?: boolean;
 }
 
+// Add error boundary component for Three.js errors
+function ErrorBoundary({ children }: { children: React.ReactNode }) {
+  const [hasError, setHasError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    // Listen for errors from Three.js
+    const handleError = (event: ErrorEvent) => {
+      if (event.error && (
+        event.error.message?.includes('Cannot read properties of null') ||
+        event.error.message?.includes('trim') ||
+        event.error.message?.includes('shader')
+      )) {
+        console.error('Caught Three.js error:', event.error);
+        setError(event.error);
+        setHasError(true);
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  if (hasError) {
+    return (
+      <Html center>
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md max-w-md">
+          <h3 className="text-lg font-semibold text-red-800 mb-2">Rendering Error</h3>
+          <p className="text-sm text-red-600 mb-4">
+            There was a problem rendering the 3D model. This might be due to a WebGL limitation in your browser.
+          </p>
+          <Button 
+            onClick={() => setHasError(false)} 
+            variant="outline" 
+            className="w-full"
+          >
+            Try Again
+          </Button>
+        </div>
+      </Html>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 export function ModelViewer({ 
   scene = sceneExample,
   model,
@@ -140,9 +188,26 @@ export function ModelViewer({
 }: ModelViewerProps) {
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null)
   const [webGLAvailable, setWebGLAvailable] = useState(true);
+  const [contactShadowsEnabled, setContactShadowsEnabled] = useState(true);
   
   useEffect(() => {
     setWebGLAvailable(isWebGLAvailable());
+  }, []);
+  
+  // Disable contact shadows if an error occurs
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      if (event.error && (
+        event.error.message?.includes('Cannot read properties of null') ||
+        event.error.message?.includes('trim')
+      )) {
+        console.warn('Disabling contact shadows due to error');
+        setContactShadowsEnabled(false);
+      }
+    };
+    
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
   }, []);
   
   // Determine which model(s) to render
@@ -155,6 +220,11 @@ export function ModelViewer({
     // Otherwise render all objects in the scene
     modelsToRender = scene.objects
   }
+  
+  // Filter out any invalid models to prevent rendering errors
+  modelsToRender = modelsToRender.filter(model => 
+    model && typeof model === 'object' && model.id
+  );
   
   // Handle applying scene settings
   const resolvedBackgroundColor = backgroundColor || scene?.settings?.backgroundColor || '#f1f5f9'
@@ -223,94 +293,99 @@ export function ModelViewer({
         {softShadows && enableShadows && <SoftShadows />}
         
         <Suspense fallback={<Loader />}>
-          {/* Environment lighting */}
-          <Environment preset={environmentPreset} background={false} />
-          
-          {/* Main lighting */}
-          {scene?.settings?.ambientLight ? (
-            <ambientLight 
-              intensity={scene.settings.ambientLight.intensity || 0.5} 
-              color={scene.settings.ambientLight.color || '#ffffff'} 
-            />
-          ) : (
-            <ambientLight intensity={0.5} />
-          )}
-          
-          {/* Directional lights */}
-          {scene?.settings?.directionalLight && scene.settings.directionalLight.length > 0 ? (
-            // Use lights from scene settings
-            scene.settings.directionalLight.map((light, index) => (
+          <ErrorBoundary>
+            {/* Environment lighting */}
+            <Environment preset={environmentPreset} background={false} />
+            
+            {/* Main lighting */}
+            {scene?.settings?.ambientLight ? (
+              <ambientLight 
+                intensity={scene.settings.ambientLight.intensity || 0.5} 
+                color={scene.settings.ambientLight.color || '#ffffff'} 
+              />
+            ) : (
+              <ambientLight intensity={0.5} />
+            )}
+            
+            {/* Directional lights */}
+            {scene?.settings?.directionalLight && scene.settings.directionalLight.length > 0 ? (
+              // Use lights from scene settings
+              scene.settings.directionalLight.map((light, index) => (
+                <DirectionalLightWithHelper 
+                  key={`directional-light-${index}`}
+                  position={normalizeVector3(light.position || [10, 10, 5]) as [number, number, number]}
+                  intensity={light.intensity}
+                  color={light.color}
+                  castShadow={light.castShadow}
+                  showHelper={showHelpers}
+                />
+              ))
+            ) : (
+              // Default light
               <DirectionalLightWithHelper 
-                key={index}
-                position={normalizeVector3(light.position || [10, 10, 5]) as [number, number, number]}
-                intensity={light.intensity}
-                color={light.color}
-                castShadow={light.castShadow}
+                key="default-directional-light"
+                position={[10, 10, 5]} 
+                intensity={1} 
                 showHelper={showHelpers}
               />
-            ))
-          ) : (
-            // Default light
-            <DirectionalLightWithHelper 
-              position={[10, 10, 5]} 
-              intensity={1} 
-              showHelper={showHelpers}
-            />
-          )}
-          
-          {/* Floor grid */}
-          {showGrid && <Grid 
-            infiniteGrid 
-            fadeDistance={50}
-            fadeStrength={1.5}
-            cellSize={0.5} 
-            cellThickness={0.5} 
-            sectionSize={2} 
-            sectionThickness={1}
-            sectionColor="#9d4b4b" 
-            cellColor="#6f6f6f"
-          />}
-          
-          {/* Axes helper */}
-          {showAxes && <axesHelper args={[5]} />}
-          
-          {/* Contact shadows for realistic grounding */}
-          {enableShadows && (
-            <ContactShadows 
-              position={[0, -0.01, 0]} 
-              opacity={0.4} 
-              scale={10} 
-              blur={1.5} 
-              far={10} 
-            />
-          )}
-          
-          {/* 3D Model(s) */}
-          <group>
-            {modelsToRender.map(modelItem => (
-              <ModelRenderer 
-                key={modelItem.id} 
-                model={modelItem} 
-                onSelect={handleComponentSelect} 
-                autoRotate={autoRotate}
+            )}
+            
+            {/* Floor grid */}
+            {showGrid && <Grid 
+              infiniteGrid 
+              fadeDistance={50}
+              fadeStrength={1.5}
+              cellSize={0.5} 
+              cellThickness={0.5} 
+              sectionSize={2} 
+              sectionThickness={1}
+              sectionColor="#9d4b4b" 
+              cellColor="#6f6f6f"
+            />}
+            
+            {/* Axes helper */}
+            {showAxes && <axesHelper args={[5]} />}
+            
+            {/* Contact shadows for realistic grounding - only if enabled and no errors */}
+            {enableShadows && contactShadowsEnabled && (
+              <ContactShadows 
+                position={[0, -0.01, 0]} 
+                opacity={0.4} 
+                scale={10} 
+                blur={1.5} 
+                far={10}
+                resolution={256} // Lower resolution for better compatibility
+                frames={1} // Only render once to reduce performance impact
               />
-            ))}
-          </group>
-          
-          {/* Camera controls */}
-          <OrbitControls 
-            makeDefault
-            enableZoom={true}
-            enablePan={true}
-            enableRotate={true}
-            minDistance={1}
-            maxDistance={50}
-            minPolarAngle={0}
-            maxPolarAngle={Math.PI / 2}
-          />
-          
-          {/* Optional performance stats */}
-          {showStats && <Stats className="stats" />}
+            )}
+            
+            {/* 3D Model(s) */}
+            <group>
+              {modelsToRender.map(modelItem => (
+                <ModelRenderer 
+                  key={modelItem.id} 
+                  model={modelItem} 
+                  onSelect={handleComponentSelect} 
+                  autoRotate={autoRotate}
+                />
+              ))}
+            </group>
+            
+            {/* Camera controls */}
+            <OrbitControls 
+              makeDefault
+              enableZoom={true}
+              enablePan={true}
+              enableRotate={true}
+              minDistance={1}
+              maxDistance={50}
+              minPolarAngle={0}
+              maxPolarAngle={Math.PI / 2}
+            />
+            
+            {/* Optional performance stats */}
+            {showStats && <Stats className="stats" />}
+          </ErrorBoundary>
         </Suspense>
       </Canvas>
       

@@ -24,6 +24,71 @@ const getMaterialClass = (type: MaterialType): typeof THREE.Material => {
       case 'basic':
         return THREE.MeshBasicMaterial;
       case 'phong':
+        // Check WebGL capability first
+        try {
+          const testCanvas = document.createElement('canvas');
+          const gl = testCanvas.getContext('webgl');
+          
+          // Simple test shader for MeshPhongMaterial compatibility
+          if (gl) {
+            const fragmentShader = `
+              precision mediump float;
+              varying vec3 vNormal;
+              void main() {
+                gl_FragColor = vec4(vNormal, 1.0);
+              }
+            `;
+            
+            const vertexShader = `
+              varying vec3 vNormal;
+              void main() {
+                vNormal = normalize(normalMatrix * normal);
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }
+            `;
+            
+            // Test if we can compile this shader
+            const shaderProgram = gl.createProgram();
+            
+            if (!shaderProgram) {
+              console.warn('Failed to create shader program, falling back to MeshBasicMaterial');
+              return THREE.MeshBasicMaterial;
+            }
+            
+            const vs = gl.createShader(gl.VERTEX_SHADER);
+            const fs = gl.createShader(gl.FRAGMENT_SHADER);
+            
+            if (!vs || !fs) {
+              console.warn('Failed to create shaders, falling back to MeshBasicMaterial');
+              return THREE.MeshBasicMaterial;
+            }
+            
+            try {
+              gl.shaderSource(vs, vertexShader);
+              gl.compileShader(vs);
+              
+              if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+                console.warn('Vertex shader compilation failed, falling back to MeshBasicMaterial');
+                return THREE.MeshBasicMaterial;
+              }
+              
+              gl.shaderSource(fs, fragmentShader);
+              gl.compileShader(fs);
+              
+              if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+                console.warn('Fragment shader compilation failed, falling back to MeshBasicMaterial');
+                return THREE.MeshBasicMaterial;
+              }
+            } catch (e) {
+              console.warn('Shader compilation error, falling back to MeshBasicMaterial');
+              return THREE.MeshBasicMaterial;
+            }
+          }
+        } catch (e) {
+          console.warn('Error in WebGL capability test, falling back to MeshBasicMaterial');
+          return THREE.MeshBasicMaterial;
+        }
+        
         return THREE.MeshPhongMaterial;
       case 'lambert':
         return THREE.MeshLambertMaterial;
@@ -65,7 +130,22 @@ const getMaterialClass = (type: MaterialType): typeof THREE.Material => {
           return THREE.MeshPhongMaterial;
         }
       default:
-        return THREE.MeshStandardMaterial;
+        // Similar WebGL capability check for MeshStandardMaterial
+        try {
+          const testCanvas = document.createElement('canvas');
+          const gl = testCanvas.getContext('webgl2') || testCanvas.getContext('webgl');
+          
+          if (!gl) {
+            console.warn('WebGL not available, falling back to MeshBasicMaterial');
+            return THREE.MeshBasicMaterial;
+          }
+          
+          // More conservative approach - first try MeshPhongMaterial
+          return THREE.MeshPhongMaterial;
+        } catch (e) {
+          console.warn('Error checking WebGL capabilities:', e);
+          return THREE.MeshBasicMaterial;
+        }
     }
   } catch (error) {
     console.error('Error in getMaterialClass:', error);
@@ -206,26 +286,65 @@ const createMaterial = (material: Material): THREE.Material => {
       if (MaterialClass === THREE.MeshStandardMaterial) {
         return new THREE.MeshStandardMaterial(materialProps);
       } else if (MaterialClass === THREE.MeshPhongMaterial) {
-        return new THREE.MeshPhongMaterial(materialProps);
+        try {
+          const phongMaterial = new THREE.MeshPhongMaterial(materialProps);
+          
+          // Test if the material compiles correctly by forcing a single render
+          const testGeometry = new THREE.BoxGeometry(1, 1, 1);
+          const testMesh = new THREE.Mesh(testGeometry, phongMaterial);
+          
+          // Create a minimal renderer for testing
+          const testRenderer = new THREE.WebGLRenderer({ 
+            alpha: true, 
+            antialias: false,
+            powerPreference: 'low-power'
+          });
+          testRenderer.setSize(1, 1);
+          
+          // Try to render - if this fails, it will throw an error
+          try {
+            const testScene = new THREE.Scene();
+            testScene.add(testMesh);
+            const testCamera = new THREE.PerspectiveCamera();
+            testRenderer.render(testScene, testCamera);
+            
+            // Clean up
+            testRenderer.dispose();
+            testGeometry.dispose();
+            
+            // If we got here, the material works
+            return phongMaterial;
+          } catch (e) {
+            console.warn('MeshPhongMaterial render test failed, falling back to MeshBasicMaterial');
+            return new THREE.MeshBasicMaterial({ color: material.color || '#cccccc' });
+          }
+        } catch (e) {
+          console.warn('MeshPhongMaterial creation failed, falling back to MeshBasicMaterial');
+          return new THREE.MeshBasicMaterial({ color: material.color || '#cccccc' });
+        }
       } else if (MaterialClass === THREE.MeshLambertMaterial) {
-        return new THREE.MeshLambertMaterial(materialProps);
+        try {
+          return new THREE.MeshLambertMaterial(materialProps);
+        } catch (e) {
+          console.warn('MeshLambertMaterial creation failed, falling back to MeshBasicMaterial');
+          return new THREE.MeshBasicMaterial({ color: material.color || '#cccccc' });
+        }
       } else {
+        // MeshBasicMaterial - should always work
         return new THREE.MeshBasicMaterial(materialProps);
       }
     } catch (err) {
       console.error('Error creating material', err);
-      // Fallback to a simpler material type if standard material fails
-      if (MaterialClass === THREE.MeshStandardMaterial) {
-        console.warn('Falling back to MeshBasicMaterial due to shader compilation error');
-        return new THREE.MeshBasicMaterial({ color: material.color || '#cccccc' });
-      }
-      // Last resort fallback
-      return new THREE.MeshBasicMaterial({ color: '#ff0000' });
+      // Ultimate fallback to the simplest possible material
+      return new THREE.MeshBasicMaterial({ 
+        color: material.color || '#cccccc',
+        wireframe: true // Use wireframe as a last resort
+      });
     }
   } catch (error) {
     console.error('Error in createMaterial', error);
     // Ultimate fallback
-    return new THREE.MeshBasicMaterial({ color: '#ff0000' });
+    return new THREE.MeshBasicMaterial({ color: '#ff0000', wireframe: true });
   }
 };
 
@@ -329,7 +448,7 @@ const ModelComponent = ({ component, onSelect }: { component: Component, onSelec
   }, [component]);
   
   // Handle primitive geometry
-  if ('type' in component.geometry) {
+  if ('type' in component.geometry && component.geometry.type) {
     const geometry = createGeometry(component.geometry);
 
     return (
@@ -372,8 +491,11 @@ const CustomModel = ({
   component: Component, 
   onSelect?: (id: string) => void 
 }) => {
-  const { scene } = useGLTF(geometry.path);
+  const { scene: gltfScene } = useGLTF(geometry.path);
   const groupRef = useRef<THREE.Group>(null);
+  
+  // Ensure we have a valid scene to work with
+  const clonedScene = gltfScene ? gltfScene.clone() : new THREE.Group();
   
   useEffect(() => {
     if (!groupRef.current) return;
@@ -405,7 +527,7 @@ const CustomModel = ({
   return (
     <primitive 
       ref={groupRef}
-      object={scene.clone()} 
+      object={clonedScene} 
       onClick={(e: React.MouseEvent<THREE.Object3D>) => {
         e.stopPropagation();
         onSelect?.(component.id);
@@ -449,8 +571,8 @@ const ModelGroup = ({
 
   return (
     <group ref={groupRef} visible={group.visible !== false}>
-      {group.components.map((component: Component) => (
-        <ModelComponent key={component.id} component={component} onSelect={onSelect} />
+      {group.components.map((component: Component, index: number) => (
+        <ModelComponent key={component.id || `group-component-${group.id}-${index}`} component={component} onSelect={onSelect} />
       ))}
     </group>
   );
@@ -468,6 +590,12 @@ export function ModelRenderer({
   onSelect?: (id: string) => void,
   modelScale?: number
 }) {
+  // Handle potential invalid model objects without breaking
+  if (!model || typeof model !== 'object') {
+    console.error('Invalid model provided to ModelRenderer:', model);
+    return null;
+  }
+
   const groupRef = useRef<THREE.Group>(null);
 
   // Apply model-level transforms
@@ -501,13 +629,21 @@ export function ModelRenderer({
   return (
     <group ref={groupRef}>
       {/* Render individual components */}
-      {model.components.map((component: Component) => (
-        <ModelComponent key={component.id} component={component} onSelect={onSelect} />
+      {model.components?.map((component: Component, index: number) => (
+        <ModelComponent 
+          key={component.id || `component-${index}`} 
+          component={component} 
+          onSelect={onSelect} 
+        />
       ))}
       
       {/* Render groups */}
-      {model.groups?.map((group: Group) => (
-        <ModelGroup key={group.id} group={group} onSelect={onSelect} />
+      {model.groups?.map((group: Group, index: number) => (
+        <ModelGroup 
+          key={group.id || `group-${index}`} 
+          group={group} 
+          onSelect={onSelect} 
+        />
       ))}
     </group>
   );
