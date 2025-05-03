@@ -1,0 +1,423 @@
+# 3D Model Schema Documentation
+
+This documentation provides a comprehensive reference for the 3D model schema used in the Floor Planner application.
+
+## Scene Structure
+
+A scene is the top-level container for all 3D objects and environment settings.
+
+```json filename="scene-structure.json"
+{
+  "scene": {                         // Optional wrapper object
+    "id": "unique_scene_id",         // Optional string
+    "name": "Room Name",             // Required string
+    "version": "1.0",                // Optional string
+    "units": "meters",               // Optional: "meters" | "centimeters" | "inches" | "feet"
+    "objects": [ ... ],              // Required array of Model objects
+    "settings": { ... }              // Optional scene settings
+  }
+}
+```
+
+### Scene Settings
+
+Configure environment settings like lighting and background.
+
+```json filename="scene-settings.json"
+"settings": {
+  "backgroundColor": "#f1f5f9",      // Optional hex color
+  "environmentMap": "url/to/map",    // Optional URL to environment map
+  "shadows": true,                   // Optional boolean
+  
+  "ambientLight": {
+    "color": "#ffffff",              // Optional hex color
+    "intensity": 0.5                 // Optional number 0-10
+  },
+  
+  "directionalLight": [              // Optional array of directional lights
+    {
+      "color": "#ffffff",            // Optional hex color
+      "intensity": 1.0,              // Optional number 0-10
+      "position": {                  // Optional Vector3
+        "x": 10, "y": 10, "z": 5
+      },
+      "castShadow": true             // Optional boolean
+    }
+  ],
+  
+  "fog": {                           // Optional fog settings
+    "type": "linear",                // Required: "linear" | "exponential"
+    "color": "#e0e0e0",              // Required hex color
+    "near": 1,                       // Optional (for linear fog) - positive number
+    "far": 100,                      // Optional (for linear fog) - positive number
+    "density": 0.05                  // Optional (for exponential fog) - positive number
+  }
+}
+```
+
+## Model Structure
+
+Models represent individual furniture or structural items in the scene.
+
+```json filename="model-structure.json"
+{
+  "id": "unique_model_id",           // Required string
+  "name": "Model Name",              // Required string
+  "type": "furniture",               // Required: "furniture" | "structure" | "decor" | "fixture" | "appliance" | "custom"
+  "subtype": "chair",                // Optional: "chair" | "table" | "sofa" | "bed" | "cabinet" | "bookshelf" | "wall" |
+                                     // "floor" | "ceiling" | "door" | "window" | "light" | "plant" | "art" |
+                                     // "rug" | "curtain" | "kitchen" | "bathroom" | "custom"
+  "description": "Description",      // Optional string
+  
+  // Position, rotation, and scale can be defined directly or within transformation
+  "position": { "x": 0, "y": 0, "z": 0 },              // Optional Vector3
+  "rotation": { "x": 0, "y": 0, "z": 0 },              // Optional Vector3 (in radians)
+  "scale": { "x": 1, "y": 1, "z": 1 },                 // Optional Vector3
+  
+  // Alternative format with transformation object
+  "transformation": {
+    "position": { "x": 0, "y": 0, "z": 0 },            // Required Vector3
+    "rotation": { "x": 0, "y": 0, "z": 0 },            // Optional Vector3 (in radians)
+    "scale": { "x": 1, "y": 1, "z": 1 }                // Optional Vector3
+  },
+  
+  "components": [ ... ],             // Required array of Component objects
+  "groups": [ ... ],                 // Optional array of Group objects
+  "tags": [ "tag1", "tag2" ],        // Optional array of strings
+  "metadata": {                      // Optional key-value pairs
+    "key1": "value1",
+    "key2": "value2"
+  }
+}
+```
+
+## Groups
+
+Groups allow you to organize multiple components together for easier manipulation.
+
+```json filename="group-structure.json"
+{
+  "id": "group_id",                  // Required string
+  "name": "Group Name",              // Optional string
+  "components": [ ... ],             // Required array of Component objects
+  
+  // Position, rotation, and scale can be defined directly or within transformation
+  "position": { "x": 0, "y": 0, "z": 0 },              // Optional Vector3
+  "rotation": { "x": 0, "y": 0, "z": 0 },              // Optional Vector3 (in radians)
+  "scale": { "x": 1, "y": 1, "z": 1 },                 // Optional Vector3
+  
+  // Alternative format with transformation object
+  "transformation": {
+    "position": { "x": 0, "y": 0, "z": 0 },            // Required Vector3
+    "rotation": { "x": 0, "y": 0, "z": 0 },            // Optional Vector3 (in radians)
+    "scale": { "x": 1, "y": 1, "z": 1 }                // Optional Vector3
+  },
+  
+  "visible": true                    // Optional boolean (default: true)
+}
+```
+
+## Components
+
+Components are the basic building blocks that make up a model, using primitive shapes or custom geometry.
+
+```json filename="component-structure.json"
+{
+  "id": "component_id",              // Required string
+  "name": "Component Name",          // Optional string
+  "primitive": "box",                // Optional string (deprecated, use geometry instead)
+  
+  // Position, rotation, and scale can be defined directly or within transformation
+  "position": { "x": 0, "y": 0, "z": 0 },              // Optional Vector3
+  "rotation": { "x": 0, "y": 0, "z": 0 },              // Optional Vector3 (in radians)
+  "scale": { "x": 1, "y": 1, "z": 1 },                 // Optional Vector3
+  
+  // Alternative format with transformation object
+  "transformation": {
+    "position": { "x": 0, "y": 0, "z": 0 },            // Required Vector3
+    "rotation": { "x": 0, "y": 0, "z": 0 },            // Optional Vector3 (in radians)
+    "scale": { "x": 1, "y": 1, "z": 1 }                // Optional Vector3
+  },
+  
+  "material": {                      // Required material definition
+    "type": "standard",              // Required: "standard" | "basic" | "phong" | "lambert" | 
+                                     // "metal" | "wood" | "glass" | "laminate" | "fabric" | 
+                                     // "plastic" | "ceramic" | "leather" | "custom"
+    "color": "#ff0000",              // Required hex color
+    "opacity": 1.0,                  // Optional number (0-1)
+    "metalness": 0.0,                // Optional number (0-1)
+    "roughness": 0.5,                // Optional number (0-1)
+    "wireframe": false,              // Optional boolean
+    "textureMap": "url/to/texture",  // Optional URL
+    "normalMap": "url/to/map",       // Optional URL
+    "bumpMap": "url/to/map",         // Optional URL
+    "envMap": "url/to/map",          // Optional URL
+    "reflectivity": 0.5,             // Optional number (0-1)
+    "refractionRatio": 0.5,          // Optional number (0-1)
+    "emissive": "#000000",           // Optional hex color
+    "emissiveIntensity": 1.0,        // Optional number (≥0)
+    "clearcoat": 0.0,                // Optional number (0-1)
+    "clearcoatRoughness": 0.0,       // Optional number (0-1)
+    "aoMap": "url/to/map",           // Optional URL
+    "aoMapIntensity": 1.0            // Optional number (≥0)
+  },
+  
+  "castShadow": true,                // Optional boolean (default: true)
+  "receiveShadow": true,             // Optional boolean (default: true)
+  "visible": true                    // Optional boolean (default: true)
+}
+```
+
+## Geometry Types
+
+### Box Geometry
+
+```json filename="box-geometry.json"
+"geometry": {
+  "type": "box",
+  "dimensions": {
+    "width": 1.0,                  // Optional positive number (default: 1)
+    "height": 1.0,                 // Optional positive number (default: 1)
+    "depth": 1.0                   // Optional positive number (default: 1)
+  }
+}
+```
+
+### Cylinder Geometry
+
+```json filename="cylinder-geometry.json"
+"geometry": {
+  "type": "cylinder",
+  "dimensions": {
+    "radiusTop": 0.5,              // Optional positive number (default: 0.5)
+    "radiusBottom": 0.5,           // Optional positive number (default: 0.5)
+    "radius": 0.5,                 // Optional positive number, shorthand for both radii
+    "height": 1.0,                 // Optional positive number (default: 1)
+    "segments": 32                 // Optional positive integer (default: 32)
+  }
+}
+```
+
+### Sphere Geometry
+
+```json filename="sphere-geometry.json"
+"geometry": {
+  "type": "sphere",
+  "dimensions": {
+    "radius": 0.5,                 // Optional positive number (default: 0.5)
+    "segments": 32                 // Optional positive integer (default: 32)
+  }
+}
+```
+
+### Plane Geometry
+
+```json filename="plane-geometry.json"
+"geometry": {
+  "type": "plane",
+  "dimensions": {
+    "width": 1.0,                  // Optional positive number (default: 1)
+    "height": 1.0                  // Optional positive number (default: 1)
+  }
+}
+```
+
+### Custom Geometry
+
+```json filename="custom-geometry.json"
+"geometry": {
+  "path": "url/to/model",          // Required URL string
+  "format": "gltf"                 // Required: "gltf" | "glb" | "obj" | "fbx" | "json"
+}
+```
+
+## Vector3 Formats
+
+Vector3 values (position, rotation, scale) can be specified in two formats:
+
+```json filename="vector3-formats.json"
+// Object format
+{ "x": 0, "y": 1, "z": 2 }
+
+// Array format
+[0, 1, 2]  // x, y, z
+```
+
+## Validation Rules
+
+All data is validated using Zod schemas that enforce these constraints:
+
+- **IDs**: Must be non-empty strings
+- **Names**: Required strings for models and scenes
+- **Colors**: Must be valid hex codes (e.g., #FF0000 or #F00)
+- **Material properties**: Numeric values like opacity, metalness, and roughness must be between 0 and 1
+- **Dimensions**: All dimensions must be positive numbers
+- **URLs**: Must be valid URL strings
+- **Enums**: Values like material type, model type, and subtype must match predefined options
+- **Arrays**: Components array is required and cannot be empty for models
+- **Types**: Each field enforces specific types (string, number, boolean, object, array)
+
+## Schema Definitions
+
+Examples of the Zod schemas used for validation:
+
+```typescript filename="model-schema-zod.ts"
+// Material validation
+const MaterialSchema = z.object({
+  type: z.enum([
+    'standard', 'basic', 'phong', 'lambert', 'metal', 
+    'wood', 'glass', 'laminate', 'fabric', 'plastic', 
+    'ceramic', 'leather', 'custom'
+  ]),
+  color: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/),
+  opacity: z.number().min(0).max(1).optional(),
+  metalness: z.number().min(0).max(1).optional(),
+  roughness: z.number().min(0).max(1).optional(),
+  // ...other properties
+});
+
+// Vector3 schema supports both array [x,y,z] and object {x,y,z} formats
+const Vector3Schema = z.union([
+  z.tuple([z.number(), z.number(), z.number()]),
+  z.object({ x: z.number(), y: z.number(), z: z.number() })
+]);
+
+// Component schema
+const ComponentSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  // ...other fields
+});
+
+// Models must have at least one component
+const ModelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  type: ModelTypeSchema,
+  // ...other fields
+  components: z.array(ComponentSchema).min(1),
+  // ...more fields
+});
+```
+
+## Helper Functions
+
+The application provides validation helper functions:
+
+```typescript filename="model-schema-zod.ts"
+// Validate a scene object
+function validateScene(data: unknown): ZodScene {
+  try {
+    // Try parsing as a wrapped scene first
+    const parsed = WrappedSceneSchema.safeParse(data);
+    if (parsed.success) {
+      return parsed.data.scene;
+    }
+    
+    // Try parsing as a direct scene
+    const directScene = SceneSchema.parse(data);
+    return directScene;
+  } catch (error) {
+    // If both fail, throw the validation error
+    throw SceneSchema.parse(data);
+  }
+}
+
+// Validate a model object
+function validateModel(data: unknown): ZodModel {
+  return ModelSchema.parse(data);
+}
+```
+
+## Best Practices
+
+- Use the **basic** material type for maximum compatibility across devices
+- Prefer object notation for Vector3 values for better readability
+- Group related components together using the groups feature
+- Keep dimensions reasonable (preferably under 10 units in any dimension)
+- Use descriptive IDs and names
+- Implement proper nesting: scenes contain models, models contain components/groups
+- Add metadata for any custom properties needed by your application
+
+## Common Issues and Solutions
+
+- **Materials not rendering correctly:** Use basic material type for compatibility
+- **Objects not visible:** Check position coordinates and camera position
+- **Validation errors:** Ensure all required fields are present and match expected formats
+- **Performance issues:** Reduce the number of components or use simpler geometries
+- **Shadows not appearing:** Verify castShadow/receiveShadow properties and scene lighting settings
+
+## Example: Complete Chair
+
+Here's a complete example of a chair model:
+
+```json filename="example-chair.json"
+{
+  "id": "chair_001",
+  "type": "furniture",
+  "subtype": "chair",
+  "name": "Modern Chair",
+  "components": [
+    {
+      "id": "chair_seat",
+      "primitive": "box",
+      "dimensions": { "width": 0.5, "height": 0.05, "depth": 0.5 },
+      "position": { "x": 0, "y": 0.4, "z": 0 },
+      "material": {
+        "type": "basic",
+        "color": "#a67c52"
+      }
+    },
+    {
+      "id": "chair_backrest",
+      "primitive": "box",
+      "dimensions": { "width": 0.5, "height": 0.4, "depth": 0.05 },
+      "position": { "x": 0, "y": 0.625, "z": -0.225 },
+      "material": {
+        "type": "basic",
+        "color": "#a67c52"
+      }
+    },
+    {
+      "id": "chair_leg_1",
+      "primitive": "cylinder",
+      "dimensions": { "radiusTop": 0.025, "radiusBottom": 0.025, "height": 0.4 },
+      "position": { "x": -0.225, "y": 0.2, "z": 0.225 },
+      "material": {
+        "type": "basic",
+        "color": "#555555"
+      }
+    },
+    {
+      "id": "chair_leg_2",
+      "primitive": "cylinder",
+      "dimensions": { "radiusTop": 0.025, "radiusBottom": 0.025, "height": 0.4 },
+      "position": { "x": 0.225, "y": 0.2, "z": 0.225 },
+      "material": {
+        "type": "basic",
+        "color": "#555555"
+      }
+    },
+    {
+      "id": "chair_leg_3",
+      "primitive": "cylinder",
+      "dimensions": { "radiusTop": 0.025, "radiusBottom": 0.025, "height": 0.4 },
+      "position": { "x": -0.225, "y": 0.2, "z": -0.225 },
+      "material": {
+        "type": "basic",
+        "color": "#555555"
+      }
+    },
+    {
+      "id": "chair_leg_4",
+      "primitive": "cylinder",
+      "dimensions": { "radiusTop": 0.025, "radiusBottom": 0.025, "height": 0.4 },
+      "position": { "x": 0.225, "y": 0.2, "z": -0.225 },
+      "material": {
+        "type": "basic",
+        "color": "#555555"
+      }
+    }
+  ]
+}
+```
